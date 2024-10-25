@@ -329,6 +329,13 @@ class Mappraiser(Operator):
             raise traitlets.TraitError("MC mode is not currently supported")
         return check
 
+    @traitlets.validate("use_noise_model")
+    def _check_use_noise_model(self, proposal):
+        check = proposal["value"]
+        if check and self.pair_diff:
+            raise traitlets.TraitError("Using a noise model is not supported with pair-diff")
+        return check
+
     # Checks for mapmaker parameters (solver, ...)
     @traitlets.validate("gap_stgy")
     def _check_gap_stgy(self, proposal):
@@ -840,6 +847,7 @@ class Mappraiser(Operator):
         if self.pair_diff:
             ndet //= 2
             nsamp_det //= 2
+            nblocks //= 2
 
         # Copy the signal.  We always need to do this, even if we are running MCs.
 
@@ -1091,6 +1099,7 @@ class Mappraiser(Operator):
                     self._mappraiser_invtt,
                     self._mappraiser_tt,
                     libmappraiser.INVTT_TYPE,
+                    self.pair_diff,
                     apod_window_type=self.apod_window_type,
                     print_info=(data.comm.world_rank == 0),
                     save_psd=(self.save_psd and data.comm.world_rank == 0),

@@ -488,6 +488,7 @@ def compute_autocorrelations(
     buffer_inv_tt,
     buffer_tt,
     invtt_dtype,
+    pair_diff: bool,
     print_info=False,
     save_psd=False,
     save_dir="",
@@ -499,6 +500,8 @@ def compute_autocorrelations(
     for iob, ob in enumerate(data.obs):
         dets = ob.select_local_detectors(flagmask=det_mask)
         for idet, det in enumerate(dets):
+            if pair_diff and (idet % 2 == 1):
+                continue
             blocksize = local_block_sizes[iblock]
             nsetod = mappraiser_noise[offset : offset + blocksize]
             slc = slice(iblock * lambda_, (iblock + 1) * lambda_, 1)
