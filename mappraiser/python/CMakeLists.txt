@@ -1,5 +1,5 @@
 # Determine our python install location and set up a rule to install the modules
-find_package(Python3 3.8 COMPONENTS Interpreter Development.Module REQUIRED)
+find_package(Python3 3.8 COMPONENTS Interpreter REQUIRED)
 
 execute_process(
     COMMAND "${Python3_EXECUTABLE}" -c "if True:
