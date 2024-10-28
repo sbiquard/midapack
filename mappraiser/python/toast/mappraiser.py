@@ -175,12 +175,6 @@ class Mappraiser(Operator):
 
     signal_fraction = Float(1.0, help="Fraction of the sky signal to keep")
 
-    limit_det = Int(
-        None,
-        allow_none=True,
-        help="Limit the number of local detectors to this number.",
-    )
-
     # Additional parameters for the C library
 
     # solver
@@ -618,7 +612,7 @@ class Mappraiser(Operator):
             nsamp += ob.n_local_samples
 
         interval_starts = np.array(interval_starts, dtype=np.int64)
-        all_dets = list(sorted(all_dets))[: self.limit_det]
+        all_dets = list(sorted(all_dets))
 
         nnz_full = len(self.stokes_weights.mode)
 
