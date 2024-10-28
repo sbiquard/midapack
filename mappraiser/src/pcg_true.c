@@ -14,7 +14,7 @@
 #include <stdlib.h>
 
 #include <mappraiser/pcg_true.h>
-#include <midapack/memutils.h>
+#include <memutils.h>
 
 double scalar_prod_reduce(MPI_Comm comm, int n, const double *pixpond,
                           const double *p1, const double *p2,

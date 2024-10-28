@@ -8,14 +8,13 @@
 
 #include "mapmat/mapmat.h"
 #include <stdbool.h>
-#include <stdlib.h>
 
 #ifndef NDEBUG
 #include <assert.h>
 #endif
 
 #include <mappraiser/mapping.h>
-#include <midapack/memutils.h>
+#include <memutils.h>
 
 void print_gap_stgy(GapStrategy gs) {
     switch (gs) {

@@ -7,7 +7,6 @@
  * @update June 2020 by Aygul Jamal
  */
 
-#include "precond.h"
 #include <fitsio.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,8 +19,9 @@
 #include <mappraiser/map.h>
 #include <mappraiser/mapping.h>
 #include <mappraiser/pcg_true.h>
+#include <mappraiser/precond.h>
 #include <mappraiser/weight.h>
-#include <midapack/memutils.h>
+#include <memutils.h>
 
 #ifdef WITH_ECG
 #include <mappraiser/ecg.h>
