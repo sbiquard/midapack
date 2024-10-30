@@ -300,21 +300,27 @@ def compute_autocorrelations(
                 (idet * nobs + iob) * lambda_ + lambda_,
                 1,
             )
-            buffer_inv_tt[slc], _ = noise_autocorrelation(
-                nsetod,
-                blocksize,
-                lambda_,
-                fsamp,
-                idet,
-                invtt_dtype,
-                apod_window_type,
-                verbose=(print_info and (idet == 0) and (iob == 0)),
-                save_psd=save_psd,
-                fname=os.path.join(save_dir, f"noise_fit_{uid}_{det}"),
-            )
-            buffer_tt[slc] = compute_autocorr(
-                1 / compute_psd_eff(buffer_inv_tt[slc], blocksize), lambda_
-            )
+            if lambda_ == 1:
+                # no need for FFTs, just take the variance
+                v = np.var(nsetod)
+                buffer_inv_tt[slc] = 1 / v
+                buffer_tt[slc] = v
+            else:
+                buffer_inv_tt[slc], _ = noise_autocorrelation(
+                    nsetod,
+                    blocksize,
+                    lambda_,
+                    fsamp,
+                    idet,
+                    invtt_dtype,
+                    apod_window_type,
+                    verbose=(print_info and (idet == 0) and (iob == 0)),
+                    save_psd=save_psd,
+                    fname=os.path.join(save_dir, f"noise_fit_{uid}_{det}"),
+                )
+                buffer_tt[slc] = compute_autocorr(
+                    1 / compute_psd_eff(buffer_inv_tt[slc], blocksize), lambda_
+                )
             offset += blocksize
     return
 
