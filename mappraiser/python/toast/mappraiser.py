@@ -20,6 +20,7 @@ from .utils import (
     log_time_memory,
     stage_in_turns,
     stage_local,
+    pairwise,
 )
 
 libmappraiser = None
@@ -41,138 +42,90 @@ class Mappraiser(Operator):
     """Operator which passes data to libmappraiser for map-making."""
 
     # Class traits
-
     API = Int(0, help="Internal interface version for this operator")
-
     params = Dict(default_value={}, help="Parameters to pass to mappraiser")
-
-    paramfile = Unicode(
-        None, allow_none=True, help="Read mappraiser parameters from this file"
-    )
-
+    paramfile = Unicode(None, allow_none=True, help="Read mappraiser parameters from this file")
     noise_data = Unicode(
         "noise",
         allow_none=True,
         help="Observation detdata key for noise data (if None, triggers noiseless mode)",
     )
-
-    det_data = Unicode(
-        defaults.det_data, help="Observation detdata key for the timestream data"
-    )
-
-    det_mask = Int(
-        defaults.det_mask_nonscience,
-        help="Bit mask value for per-detector flagging",
-    )
-
+    det_data = Unicode(defaults.det_data, help="Observation detdata key for the timestream data")
+    det_mask = Int(defaults.det_mask_nonscience, help="Bit mask value for per-detector flagging")
     det_flags = Unicode(
         defaults.det_flags,
         allow_none=True,
         help="Observation detdata key for flags to use",
     )
-
     det_flag_mask = Int(
-        defaults.det_mask_nonscience,
-        help="Bit mask value for detector sample flagging",
+        defaults.det_mask_nonscience, help="Bit mask value for detector sample flagging"
     )
-
     shared_flags = Unicode(
         defaults.shared_flags,
         allow_none=True,
         help="Observation shared key for telescope flags to use",
     )
-
     shared_flag_mask = Int(
         defaults.shared_mask_nonscience,
         help="Bit mask value for optional shared flagging",
     )
-
     # instance of PixelsHealpix, operator which generates healpix pixel numbers
     pixel_pointing = Instance(
         klass=Operator,
         allow_none=True,
         help="This must be an instance of a pixel pointing operator",
     )
-
     # instance of StokesWeights, operator which generates I/Q/U pointing weights
     stokes_weights = Instance(
         klass=Operator,
         allow_none=True,
         help="This must be an instance of a Stokes weights operator",
     )
-
-    noise_model = Unicode(
-        "noise_model", help="Observation key containing the noise model"
-    )
-
     purge_det_data = Bool(
         False,
         help="If True, clear all observation detector data after copying to mappraiser buffers",
     )
-
     # ! N.B: not supported for the moment
     mcmode = Bool(
         False,
         help="If true, Madam will store auxiliary information such as pixel matrices and noise filter",
     )
-
     copy_groups = Int(
         1,
         help="The processes on each node are split into this number of groups to copy data in turns",
     )
-
     noise_scale = Unicode(
         "noise_scale",
         help="Observation key with optional scaling factor for noise PSDs",
     )
-
-    mem_report = Bool(
-        False, help="Print system memory use while staging/unstaging data"
-    )
-
+    mem_report = Bool(False, help="Print system memory use while staging/unstaging data")
     pair_diff = Bool(
         False,
         help="Process differenced timestreams between orthogonal detectors in pairs.",
     )
-
     estimate_spin_zero = Bool(
         False,
         help="When doing pair-diff, still estimate a spin-zero field (T) alongside Q and U.",
     )
 
     # Some traits for noise estimation
-
-    use_noise_model = Bool(
-        False,
-        help="Use an existing noise model fitted to the data (`noise_model_fit` trait)",
-    )
-
-    noise_model_fit = Unicode(
-        "noise_estim_fit",
-        help="Observation key containing a noise model fitted to the data",
-    )
-
-    save_psd = Bool(False, help="Save noise PSD information during inv_tt computation")
-
+    bandwidth = Int(16384, help="Half-bandwidth for the noise model")
+    estimate_psd = Bool(True, help="Estimate the noise PSD from the data")
     apod_window_type = Unicode(
         "chebwin", help="Type of apodisation window to use during noise PSD estimation"
     )
-
-    bandwidth = Int(16384, help="Half-bandwidth for the noise model")
+    save_psd = Bool(False, help="Save noise PSD information during inv_tt computation")
+    noise_model = Unicode(defaults.noise_model, help="Observation key containing the noise model")
 
     # Some useful traits for debugging
-
     noiseless = Bool(False, help="Activate noiseless mode")
-
     fill_noise_zero = Bool(
         False, help="Fill the noise vector with zeros just before calling Mappraiser"
     )
-
     downscale = Int(
         1,
         help="Scale down the noise by the sqrt of this number to artifically increase S/N ratio",
     )
-
     signal_fraction = Float(1.0, help="Fraction of the sky signal to keep")
 
     # Additional parameters for the C library
@@ -185,9 +138,7 @@ class Mappraiser(Operator):
     bs_red = Int(0, help="Use dynamic search reduction")
 
     # preconditioner
-    precond = Int(
-        0, help="Choose preconditioner (0->BJ, 1->2lvl a priori, 2->2lvl a posteriori)"
-    )
+    precond = Int(0, help="Choose preconditioner (0->BJ, 1->2lvl a priori, 2->2lvl a posteriori)")
     z_2lvl = Int(0, help="Size of 2lvl deflation space")
     ortho_alg = Int(1, help="Orthogonalization scheme for ECG (O->odir, 1->omin)")
 
@@ -236,9 +187,7 @@ class Mappraiser(Operator):
         pixels = proposal["value"]
         if pixels is not None:
             if not isinstance(pixels, Operator):
-                raise traitlets.TraitError(
-                    "pixel_pointing should be an Operator instance"
-                )
+                raise traitlets.TraitError("pixel_pointing should be an Operator instance")
             # Check that this operator has the traits we expect
             for trt in ["pixels", "create_dist", "view"]:
                 if not pixels.has_trait(trt):
@@ -251,9 +200,7 @@ class Mappraiser(Operator):
         weights = proposal["value"]
         if weights is not None:
             if not isinstance(weights, Operator):
-                raise traitlets.TraitError(
-                    "stokes_weights should be an Operator instance"
-                )
+                raise traitlets.TraitError("stokes_weights should be an Operator instance")
             # Check that this operator has the traits we expect
             for trt in ["weights", "view"]:
                 if not weights.has_trait(trt):
@@ -290,9 +237,7 @@ class Mappraiser(Operator):
         if check not in (0, 1, 2, 3, 4):
             msg = "Invalid gap_stgy - accepted values are:\n"
             msg += "0 -> condition on gaps having zero signal\n"
-            msg += (
-                "1 -> marginalize on gap contents using 1 extra pixel/scan/detector\n"
-            )
+            msg += "1 -> marginalize on gap contents using 1 extra pixel/scan/detector\n"
             msg += "2 -> iterative noise weighting 'nested PCG' (completely ignore the gaps)\n"
             msg += "3 -> iterative noise weighting without gaps\n"
             msg += "4 -> marginalize on gap contents using 1 extra pixel/proc"
@@ -408,9 +353,7 @@ class Mappraiser(Operator):
                 raise RuntimeError(msg)
 
         if "fsample" not in params:
-            params["fsample"] = data.obs[0].telescope.focalplane.sample_rate.to_value(
-                u.Hz
-            )
+            params["fsample"] = data.obs[0].telescope.focalplane.sample_rate.to_value(u.Hz)
 
         # Set mappraiser parameters that depend on our traits
         if self.mcmode:
@@ -532,13 +475,15 @@ class Mappraiser(Operator):
 
     def _requires(self):
         req = {
-            "meta": [self.noise_model],
-            "shared": [
-                self.times,
-            ],
+            "meta": [],
             "detdata": [self.det_data],
-            "intervals": list(),
+            "intervals": [],
+            "shared": [],
         }
+        if self.noise_data is not None:
+            req["detdata"].append(self.noise_data)
+        if self.noise_model is not None:
+            req["meta"].append(self.noise_model)
         if self.shared_flags is not None:
             req["shared"].append(self.shared_flags)
         if self.det_flags is not None:
@@ -546,8 +491,8 @@ class Mappraiser(Operator):
         return req
 
     def _provides(self):
-        prov = {"detdata": list()}
-        return prov
+        # We do not provide any data back to the pipeline
+        return {}
 
     @function_timer
     def _prepare(self, params, data, detectors):
@@ -599,9 +544,7 @@ class Mappraiser(Operator):
                         dtype=np.float64,
                     )
                 else:
-                    check_freqs = (
-                        ob[self.noise_model].freq(ob.local_detectors[0]).to_value(u.Hz)
-                    )
+                    check_freqs = ob[self.noise_model].freq(ob.local_detectors[0]).to_value(u.Hz)
                     if not np.allclose(psd_freqs, check_freqs):
                         raise RuntimeError(
                             "All PSDs passed to Mappraiser must have the same frequency binning."
@@ -639,9 +582,7 @@ class Mappraiser(Operator):
         data.comm.comm_world.barrier()
         timer.stop()
         if data.comm.world_rank == 0:
-            msg = "{} Compute data dimensions: {:0.1f} s".format(
-                self._logprefix, timer.seconds()
-            )
+            msg = "{} Compute data dimensions: {:0.1f} s".format(self._logprefix, timer.seconds())
             log.debug(msg)
 
         return (
@@ -830,7 +771,8 @@ class Mappraiser(Operator):
         self._mappraiser_obsindxs = self._mappraiser_obsindxs_raw.array()
         self._mappraiser_telescopes = self._mappraiser_telescopes_raw.array()
 
-        # Compute sizes of local data blocks, store telescope, ob and det uids (for gap-filling procedure)
+        # Compute sizes of local data blocks
+        # and store telescope, ob and det uids (for gap-filling)
         for iobs, ob in enumerate(data.obs):
             dets = ob.select_local_detectors(all_dets, flagmask=self.det_mask)
             sindx = ob.session.uid
@@ -872,9 +814,7 @@ class Mappraiser(Operator):
 
         # Check if the simulation contains any noise at all.
         if self.noiseless:
-            msg = "{} Noiseless mode -> noise buffer filled with zeros".format(
-                self._logprefix
-            )
+            msg = "{} Noiseless mode -> noise buffer filled with zeros".format(self._logprefix)
             log.info_rank(
                 msg,
                 data.comm.comm_world,
@@ -956,47 +896,51 @@ class Mappraiser(Operator):
                 self._mappraiser_noise /= np.sqrt(self.downscale)
 
             lambda_ = params["lambda"]
-            if self.use_noise_model:
-                # Use an existing noise model
+            if not self.estimate_psd:
+                # Use existing noise model instead of estimating from the data
                 for iob, ob in enumerate(data.obs):
                     # Get the fitted noise object for this observation.
-                    nse_fit = ob[self.noise_model_fit]
+                    model = ob[self.noise_model]
                     nse_scale = 1.0
                     if self.noise_scale is not None:
                         if self.noise_scale in ob:
                             nse_scale = float(ob[self.noise_scale])
 
                     offset = 0
-                    # local_dets = set(ob.select_local_detectors(flagmask=self.det_mask))
-                    for idet, det in enumerate(all_dets):
-                        # if det not in local_dets:
-                        #     continue
-                        psd = nse_fit.psd(det).to_value(u.K**2 * u.second) * nse_scale**2
-                        # detw = nse.detector_weight(det)
-
-                        blocksize = self._mappraiser_blocksizes[idet * nobs + iob]
-                        slc = slice(
-                            (idet * nobs + iob) * lambda_,
-                            (idet * nobs + iob) * lambda_ + lambda_,
-                        )
-
-                        # Get invtt and tt directly from the model PSD
-                        self._mappraiser_invtt[slc] = compute_autocorr(
-                            1 / psd, lambda_, apo=True
-                        )
-                        self._mappraiser_tt[slc] = compute_autocorr(
-                            psd, lambda_, apo=True
-                        )
-
-                        offset += blocksize
-
+                    local_dets = set(ob.select_local_detectors(flagmask=self.det_mask))
+                    if self.pair_diff:
+                        for idet, (det1, det2) in enumerate(pairwise(local_dets)):
+                            psd1 = model.psd(det1).to_value(u.K**2 * u.second) * nse_scale**2
+                            psd2 = model.psd(det2).to_value(u.K**2 * u.second) * nse_scale**2
+                            psd = psd1 + psd2  # assumes no correlation between detectors
+                            blocksize = self._mappraiser_blocksizes[idet * nobs + iob]
+                            slc = slice(
+                                (idet * nobs + iob) * lambda_,
+                                (idet * nobs + iob) * lambda_ + lambda_,
+                            )
+                            self._mappraiser_invtt[slc] = compute_autocorr(
+                                1 / psd, lambda_, apo=True
+                            )
+                            self._mappraiser_tt[slc] = compute_autocorr(psd, lambda_, apo=True)
+                            offset += blocksize
+                    else:
+                        for idet, det in enumerate(local_dets):
+                            psd = model.psd(det).to_value(u.K**2 * u.second) * nse_scale**2
+                            blocksize = self._mappraiser_blocksizes[idet * nobs + iob]
+                            slc = slice(
+                                (idet * nobs + iob) * lambda_,
+                                (idet * nobs + iob) * lambda_ + lambda_,
+                            )
+                            self._mappraiser_invtt[slc] = compute_autocorr(
+                                1 / psd, lambda_, apo=True
+                            )
+                            self._mappraiser_tt[slc] = compute_autocorr(psd, lambda_, apo=True)
+                            offset += blocksize
             else:
                 # Compute autocorrelation from the data
                 ob_uids = [ob.uid for ob in data.obs]
                 det_names = (
-                    all_dets
-                    if not self.pair_diff
-                    else [name[:-2] for name in all_dets[::2]]
+                    all_dets if not self.pair_diff else [name[:-2] for name in all_dets[::2]]
                 )
                 assert nobs == len(ob_uids)
                 assert ndet == len(det_names)
