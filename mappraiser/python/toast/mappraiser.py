@@ -50,7 +50,7 @@ class Mappraiser(Operator):
         None, allow_none=True, help="Read mappraiser parameters from this file"
     )
 
-    noise_name = Unicode(
+    noise_data = Unicode(
         "noise",
         allow_none=True,
         help="Observation detdata key for noise data (if None, triggers noiseless mode)",
@@ -419,9 +419,9 @@ class Mappraiser(Operator):
             params["mcmode"] = False
 
         # Check if noiseless mode is activated
-        if self.noiseless or (self.noise_name is None):
+        if self.noiseless or (self.noise_data is None):
             self.noiseless = True
-            self.noise_name = None
+            self.noise_data = None
             # diagonal noise covariance
             params["lambda"] = 1
 
@@ -888,7 +888,7 @@ class Mappraiser(Operator):
                 data,
                 nsamp,
                 all_dets,
-                self.noise_name,
+                self.noise_data,
                 self._mappraiser_noise,
                 interval_starts,
                 1,
@@ -910,7 +910,7 @@ class Mappraiser(Operator):
                     n_copy_groups,
                     nsamp,
                     all_dets,
-                    self.noise_name,
+                    self.noise_data,
                     libmappraiser.SIGNAL_TYPE,
                     interval_starts,
                     1,
@@ -931,7 +931,7 @@ class Mappraiser(Operator):
                     data,
                     nsamp,
                     all_dets,
-                    self.noise_name,
+                    self.noise_data,
                     self._mappraiser_noise,
                     interval_starts,
                     1,
