@@ -13,9 +13,7 @@ from toast.utils import Logger, dtype_to_aligned, memreport
 
 
 # Here are some helper functions adapted from toast/src/ops/madam_utils.py
-def log_time_memory(
-    data, timer=None, timer_msg=None, mem_msg=None, full_mem=False, prefix=""
-):
+def log_time_memory(data, timer=None, timer_msg=None, mem_msg=None, full_mem=False, prefix=""):
     """(This function is taken from madam_utils.py)"""
     log = Logger.get()
     data.comm.comm_world.barrier()
@@ -40,9 +38,7 @@ def log_time_memory(
             msg = "{prefix} {mem_msg} Group {data.comm.group} memory = {toast_bytes / 1024**2:0.2f} GB"
             log.debug(msg)
         if full_mem:
-            _ = memreport(
-                msg="{} {}".format(prefix, mem_msg), comm=data.comm.comm_world
-            )
+            _ = memreport(msg="{} {}".format(prefix, mem_msg), comm=data.comm.comm_world)
     if restart and timer is not None:
         timer.start()
 
@@ -76,6 +72,9 @@ def stage_local(
     """Helper function to fill a mappraiser buffer from a local detdata key.
     (This function is taken from madam_utils.py)
     """
+    if detdata_name is None:
+        return
+
     do_flags = False
     if shared_flags is not None or det_flags is not None:
         do_flags = True
@@ -318,7 +317,7 @@ def compute_autocorrelations(
                     save_psd=save_psd,
                     fname=os.path.join(save_dir, f"noise_fit_{uid}_{det}"),
                 )
-                buffer_tt[slc] = compute_autocorr(
+                buffer_tt[slc] = psd_to_autocorr(
                     1 / compute_psd_eff(buffer_inv_tt[slc], blocksize), lambda_
                 )
             offset += blocksize
@@ -449,7 +448,7 @@ def compute_psd_eff(tt, fftlen) -> np.ndarray:
     return psd
 
 
-def compute_autocorr(psd, lambda_: int, apo=True) -> np.ndarray:
+def psd_to_autocorr(psd, lambda_: int, apo=True) -> np.ndarray:
     """
     Computes the autocorrelation function from a given power spectral density.
 
@@ -469,3 +468,23 @@ def compute_autocorr(psd, lambda_: int, apo=True) -> np.ndarray:
         autocorr *= window
 
     return autocorr
+
+
+def next_fast_fft_size(n: int) -> int:
+    return int(2 ** np.ceil(np.log2(n)))
+
+
+def interpolate_psd(freq, psd, fft_size: int, rate: float = 1.0):
+    """Perform a logarithmic interpolation of PSD values."""
+    interp_freq = np.fft.rfftfreq(fft_size, 1 / rate)
+    # shift by fixed amounts in frequency and amplitude to avoid zeros
+    freq_shift = rate / fft_size
+    psd_shift = 0.01 * np.min(np.where(psd > 0, psd, 0))
+    log_x = np.log10(interp_freq + freq_shift)
+    log_xp = np.log10(freq + freq_shift)
+    log_fp = np.log10(psd + psd_shift)
+    interp_psd = np.interp(log_x, log_xp, log_fp, left="extrapolate", right="extrapolate")
+    interp_psd = np.power(10.0, interp_psd) - psd_shift
+    # zero out DC value
+    interp_psd[0] = 0
+    return interp_psd
