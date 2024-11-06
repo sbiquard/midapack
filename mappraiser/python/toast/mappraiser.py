@@ -959,7 +959,7 @@ class Mappraiser(Operator):
             )
 
         def _get_freq_psd(model, det):
-            freq = model.freq(det)
+            freq = model.freq(det).to_value(u.Hz)
             psd = model.psd(det).to_value(u.K**2 * u.second)
             return freq, psd
 
