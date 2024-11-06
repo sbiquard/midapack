@@ -963,6 +963,13 @@ class Mappraiser(Operator):
             psd = model.psd(det).to_value(u.K**2 * u.second)
             return freq, psd
 
+        def _populate_buffers(idet, psd):
+            ipsd = 1 / psd
+            ipsd[0] = 0
+            slc = _slice(idet)
+            self._mappraiser_invtt[slc] = psd_to_autocorr(ipsd, lambda_, apo=True)
+            self._mappraiser_tt[slc] = psd_to_autocorr(psd, lambda_, apo=True)
+
         for iob, ob in enumerate(data.obs):
             # Get the fitted noise object for this observation.
             model = ob[self.noise_model]
@@ -979,17 +986,13 @@ class Mappraiser(Operator):
                     freq2, psd2 = _get_freq_psd(model, det2)
                     psd1 = interpolate_psd(freq1, psd1, fft_size=fft_size, rate=fsample)
                     psd2 = interpolate_psd(freq2, psd2, fft_size=fft_size, rate=fsample)
-                    psd = psd1 + psd2  # assumes no correlation between detectors
-                    slc = _slice(idet)
-                    self._mappraiser_invtt[slc] = psd_to_autocorr(1 / psd, lambda_, apo=True)
-                    self._mappraiser_tt[slc] = psd_to_autocorr(psd, lambda_, apo=True)
+                    psd = psd1 + psd2  # assume no correlation between detectors
+                    _populate_buffers(idet, psd)
             else:
                 for idet, det in enumerate(local_dets):
                     freq, psd = _get_freq_psd(model, det)
                     psd = interpolate_psd(freq, psd, fft_size=fft_size, rate=fsample)
-                    slc = _slice(idet)
-                    self._mappraiser_invtt[slc] = psd_to_autocorr(1 / psd, lambda_, apo=True)
-                    self._mappraiser_tt[slc] = psd_to_autocorr(psd, lambda_, apo=True)
+                    _populate_buffers(idet, psd)
 
     @function_timer
     def _MLmap(self, params, data, data_size_proc, nb_blocks_loc, nnz):
