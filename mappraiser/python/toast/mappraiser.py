@@ -94,10 +94,6 @@ class Mappraiser(Operator):
         1,
         help="The processes on each node are split into this number of groups to copy data in turns",
     )
-    noise_scale = Unicode(
-        "noise_scale",
-        help="Observation key with optional scaling factor for noise PSDs",
-    )
     mem_report = Bool(False, help="Print system memory use while staging/unstaging data")
     pair_diff = Bool(
         False,
@@ -633,53 +629,6 @@ class Mappraiser(Operator):
                 full_mem=self.mem_report,
             )
 
-        # Copy timestamps and PSDs all at once, since they are never purged.
-
-        psds = dict()
-
-        timer.start()
-
-        # if not self._cached:
-        #     timestamp_storage, _ = dtype_to_aligned(libmappraiser.TIMESTAMP_TYPE)
-        #     self._mappraiser_timestamps_raw = timestamp_storage.zeros(nsamp)
-        #     self._mappraiser_timestamps = self_mappraiser_timestamps_raw.array()
-
-        #     interval = 0
-        #     time_offset = 0.0
-
-        #     for ob in data.obs:
-
-        #         # Get the noise object for this observation and create new
-        #         # entries in the dictionary when the PSD actually changes.  The detector
-        #         # weights are obtained from the noise model.
-
-        #         nse = ob[self.noise_model]
-        #         nse_scale = 1.0
-        #         if self.noise_scale is not None:
-        #             if self.noise_scale in ob:
-        #                 nse_scale = float(ob[self.noise_scale])
-
-        #         local_dets = set(ob.select_local_detectors(flagmask=self.det_mask))
-        #         for det in all_dets:
-        #             if det not in local_dets:
-        #                 continue
-        #             psd = nse.psd(det).to_value(u.K**2 * u.second) * nse_scale**2
-        #             detw = nse.detector_weight(det)
-        #             if det not in psds:
-        #                 psds[det] = [(0.0, psd, detw)]
-        #             else:
-        #                 if not np.allclose(psds[det][-1][1], psd):
-        #                     psds[det] += [(ob.shared[self.times][0], psd, detw)]
-
-        #     log_time_memory(
-        #         data,
-        #         timer=timer,
-        #         timer_msg="Copy timestamps and PSDs",
-        #         prefix=self._logprefix,
-        #         mem_msg="After timestamp staging",
-        #         full_mem=self.mem_report,
-        #     )
-
         # Are we doing pair differencing? If yes, number of dets will be 2 times smaller
         ndet = len(all_dets) if not self.pair_diff else (len(all_dets) // 2)
 
@@ -901,17 +850,12 @@ class Mappraiser(Operator):
                 for iob, ob in enumerate(data.obs):
                     # Get the fitted noise object for this observation.
                     model = ob[self.noise_model]
-                    nse_scale = 1.0
-                    if self.noise_scale is not None:
-                        if self.noise_scale in ob:
-                            nse_scale = float(ob[self.noise_scale])
-
                     offset = 0
                     local_dets = set(ob.select_local_detectors(flagmask=self.det_mask))
                     if self.pair_diff:
                         for idet, (det1, det2) in enumerate(pairwise(local_dets)):
-                            psd1 = model.psd(det1).to_value(u.K**2 * u.second) * nse_scale**2
-                            psd2 = model.psd(det2).to_value(u.K**2 * u.second) * nse_scale**2
+                            psd1 = model.psd(det1).to_value(u.K**2 * u.second)
+                            psd2 = model.psd(det2).to_value(u.K**2 * u.second)
                             psd = psd1 + psd2  # assumes no correlation between detectors
                             blocksize = self._mappraiser_blocksizes[idet * nobs + iob]
                             slc = slice(
@@ -925,7 +869,7 @@ class Mappraiser(Operator):
                             offset += blocksize
                     else:
                         for idet, det in enumerate(local_dets):
-                            psd = model.psd(det).to_value(u.K**2 * u.second) * nse_scale**2
+                            psd = model.psd(det).to_value(u.K**2 * u.second)
                             blocksize = self._mappraiser_blocksizes[idet * nobs + iob]
                             slc = slice(
                                 (idet * nobs + iob) * lambda_,
