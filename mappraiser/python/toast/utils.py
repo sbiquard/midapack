@@ -483,7 +483,7 @@ def interpolate_psd(freq, psd, fft_size: int, rate: float = 1.0):
     log_x = np.log10(interp_freq + freq_shift)
     log_xp = np.log10(freq + freq_shift)
     log_fp = np.log10(psd + psd_shift)
-    interp_psd = np.interp(log_x, log_xp, log_fp, left="extrapolate", right="extrapolate")
+    interp_psd = np.interp(log_x, log_xp, log_fp)
     interp_psd = np.power(10.0, interp_psd) - psd_shift
     # zero out DC value
     interp_psd[0] = 0
