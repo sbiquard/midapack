@@ -1000,8 +1000,8 @@ class Mappraiser(Operator):
             if self.pair_diff:
                 for idet, (det1, det2) in enumerate(pairwise(local_dets)):
                     if lambda_ == 1:
-                        w1 = model.detector_weights(det1)
-                        w2 = model.detector_weights(det2)
+                        w1 = model.detector_weight(det1)
+                        w2 = model.detector_weight(det2)
                         w = w1 + w2  # assume no correlation between detectors
                         self._mappraiser_invtt[idet * nobs + iob] = w
                         self._mappraiser_tt[idet * nobs + iob] = 1 / w
@@ -1015,7 +1015,7 @@ class Mappraiser(Operator):
             else:
                 for idet, det in enumerate(local_dets):
                     if lambda_ == 1:
-                        w = model.detector_weights(det)
+                        w = model.detector_weight(det)
                         self._mappraiser_invtt[idet * nobs + iob] = w
                         self._mappraiser_tt[idet * nobs + iob] = 1 / w
                     else:
