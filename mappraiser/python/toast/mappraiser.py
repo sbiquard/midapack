@@ -860,7 +860,7 @@ class Mappraiser(Operator):
             for i in range(ndet):
                 for j in range(nobs):
                     block_size = self._mappraiser_blocksizes[i * nobs + j]
-                    slc = slice(acc, acc + block_size, 10)  # plot every 10th sample
+                    slc = slice(acc, acc + block_size, 1)
                     axs[0].plot(self._mappraiser_signal[slc], label=f"{i}_{j}")
                     axs[1].plot(self._mappraiser_noise[slc], label=f"{i}_{j}")
                     acc += block_size
