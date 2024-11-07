@@ -1003,8 +1003,8 @@ class Mappraiser(Operator):
                         w1 = model.detector_weight(det1)
                         w2 = model.detector_weight(det2)
                         w = w1 + w2  # assume no correlation between detectors
-                        self._mappraiser_invtt[idet * nobs + iob] = w
-                        self._mappraiser_tt[idet * nobs + iob] = 1 / w
+                        self._mappraiser_invtt[idet * nobs + iob] = w.value
+                        self._mappraiser_tt[idet * nobs + iob] = 1 / w.value
                     else:
                         freq1, psd1 = _get_freq_psd(model, det1)
                         freq2, psd2 = _get_freq_psd(model, det2)
@@ -1016,8 +1016,8 @@ class Mappraiser(Operator):
                 for idet, det in enumerate(local_dets):
                     if lambda_ == 1:
                         w = model.detector_weight(det)
-                        self._mappraiser_invtt[idet * nobs + iob] = w
-                        self._mappraiser_tt[idet * nobs + iob] = 1 / w
+                        self._mappraiser_invtt[idet * nobs + iob] = w.value
+                        self._mappraiser_tt[idet * nobs + iob] = 1 / w.value
                     else:
                         freq, psd = _get_freq_psd(model, det)
                         psd = interpolate_psd(freq, psd, fft_size=fft_size, rate=fsample)
