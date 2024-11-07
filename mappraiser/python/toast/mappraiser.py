@@ -829,8 +829,7 @@ class Mappraiser(Operator):
 
         if self.zero_noise or self.noiseless:
             self._mappraiser_noise[:] = 0.0
-
-        if self.downscale > 1:
+        elif self.downscale > 1:
             self._mappraiser_noise /= np.sqrt(self.downscale)
 
         if self.binned:
@@ -1000,17 +999,29 @@ class Mappraiser(Operator):
             local_dets: list[str] = ob.select_local_detectors(flagmask=self.det_mask)
             if self.pair_diff:
                 for idet, (det1, det2) in enumerate(pairwise(local_dets)):
-                    freq1, psd1 = _get_freq_psd(model, det1)
-                    freq2, psd2 = _get_freq_psd(model, det2)
-                    psd1 = interpolate_psd(freq1, psd1, fft_size=fft_size, rate=fsample)
-                    psd2 = interpolate_psd(freq2, psd2, fft_size=fft_size, rate=fsample)
-                    psd = psd1 + psd2  # assume no correlation between detectors
-                    _populate_buffers(idet, psd)
+                    if lambda_ == 1:
+                        w1 = model.detector_weights(det1)
+                        w2 = model.detector_weights(det2)
+                        w = w1 + w2  # assume no correlation between detectors
+                        self._mappraiser_invtt[idet * nobs + iob] = 1 / w
+                        self._mappraiser_tt[idet * nobs + iob] = w
+                    else:
+                        freq1, psd1 = _get_freq_psd(model, det1)
+                        freq2, psd2 = _get_freq_psd(model, det2)
+                        psd1 = interpolate_psd(freq1, psd1, fft_size=fft_size, rate=fsample)
+                        psd2 = interpolate_psd(freq2, psd2, fft_size=fft_size, rate=fsample)
+                        psd = psd1 + psd2  # assume no correlation between detectors
+                        _populate_buffers(idet, psd)
             else:
                 for idet, det in enumerate(local_dets):
-                    freq, psd = _get_freq_psd(model, det)
-                    psd = interpolate_psd(freq, psd, fft_size=fft_size, rate=fsample)
-                    _populate_buffers(idet, psd)
+                    if lambda_ == 1:
+                        w = model.detector_weights(det)
+                        self._mappraiser_invtt[idet * nobs + iob] = 1 / w
+                        self._mappraiser_tt[idet * nobs + iob] = w
+                    else:
+                        freq, psd = _get_freq_psd(model, det)
+                        psd = interpolate_psd(freq, psd, fft_size=fft_size, rate=fsample)
+                        _populate_buffers(idet, psd)
 
     @function_timer
     def _MLmap(self, params, data, data_size_proc, nb_blocks_loc, nnz):
