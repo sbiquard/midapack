@@ -355,7 +355,12 @@ class Mappraiser(Operator):
             params["fsample"] = data.obs[0].telescope.focalplane.sample_rate.to_value(u.Hz)
 
         # Activate noiseless (and binned) mode if needed
-        self.noiseless = self.binned = self.noiseless or (self.noise_data is None)
+        if self.noise_data is None:
+            self.noiseless = True
+
+        if self.noiseless:
+            self.binned = True
+
         if self.binned:
             params["lambda"] = 1
 
