@@ -84,6 +84,13 @@ def stage_local(
     if pair_diff and pair_skip:
         raise RuntimeError("pair_diff and pair_skip in stage_local are incompatible.")
 
+    def _slice(idet, offset, obs_samples):
+        return slice(
+            (idet * nsamp + offset) * nnz,
+            (idet * nsamp + offset + obs_samples) * nnz,
+            1,
+        )
+
     for iobs, ob in enumerate(data.obs):
         local_dets = set(ob.select_local_detectors(flagmask=det_mask))
         offset = interval_starts[iobs]
@@ -108,36 +115,24 @@ def stage_local(
                 if shared_flags is not None:
                     flags |= ob.shared["flags"][:] & shared_mask
 
-                slc = slice(
-                    (idet * nsamp + offset) * nnz,
-                    (idet * nsamp + offset + obs_samples) * nnz,
-                    1,
-                )
+                slc = _slice(idet, offset, obs_samples)
                 det_a, det_b = pair
-                if detdata_name is not None:
-                    if select_qu:
-                        mappraiser_buffer[slc] = np.repeat(
-                            ob.detdata[detdata_name][det_a][..., 1:].flatten(),
-                            n_repeat,
-                        )
-                    else:
-                        mappraiser_buffer[slc] = np.repeat(
-                            ob.detdata[detdata_name][det_a].flatten(),
-                            n_repeat,
-                        )
-                    if pair_diff:
-                        # We are staging signal or noise
-                        # Take the half difference
-                        mappraiser_buffer[slc] = 0.5 * (
-                            mappraiser_buffer[slc]
-                            - np.repeat(
-                                ob.detdata[detdata_name][det_b].flatten(),
-                                n_repeat,
-                            )
-                        )
+                if select_qu:
+                    buf_a = ob.detdata[detdata_name][det_a][..., 1:].flatten()
+                    buf_b = ob.detdata[detdata_name][det_b][..., 1:].flatten()
                 else:
-                    # Noiseless cases (noise_name=None).
-                    mappraiser_buffer[slc] = 0.0
+                    buf_a = ob.detdata[detdata_name][det_a].flatten()
+                    buf_b = ob.detdata[detdata_name][det_b].flatten()
+                if n_repeat > 1:
+                    buf_a = np.repeat(buf_a, n_repeat)
+                    buf_b = np.repeat(buf_b, n_repeat)
+
+                if pair_diff:
+                    # We are staging signal or noise
+                    # Take the half difference
+                    mappraiser_buffer[slc] = 0.5 * (buf_a - buf_b)
+                else:
+                    mappraiser_buffer[slc] = buf_a
 
                 if do_flags:
                     if det_flags is None:
@@ -167,19 +162,11 @@ def stage_local(
                 if shared_flags is not None:
                     flags |= ob.shared["flags"][:] & shared_mask
 
-                slc = slice(
-                    (idet * nsamp + offset) * nnz,
-                    (idet * nsamp + offset + obs_samples) * nnz,
-                    1,
-                )
-                if detdata_name is not None:
-                    mappraiser_buffer[slc] = np.repeat(
-                        ob.detdata[detdata_name][det].flatten(),
-                        n_repeat,
-                    )
-                else:
-                    # Noiseless cases (noise_name=None).
-                    mappraiser_buffer[slc] = 0.0
+                slc = _slice(idet, offset, obs_samples)
+                buf = ob.detdata[detdata_name][det].flatten()
+                if n_repeat > 1:
+                    buf = np.repeat(buf, n_repeat)
+                mappraiser_buffer[slc] = buf
 
                 if do_flags:
                     if det_flags is None:

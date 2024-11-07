@@ -117,6 +117,7 @@ class Mappraiser(Operator):
         help="Scale down the noise by the sqrt of this number to artifically increase S/N ratio",
     )
     signal_fraction = Float(1.0, help="Fraction of the sky signal to keep")
+    plot_tod = Bool(False, help="Plot the signal+noise TOD after staging")
 
     # Additional parameters for the C library
 
@@ -846,6 +847,23 @@ class Mappraiser(Operator):
             mem_msg="After noise staging",
             full_mem=self.mem_report,
         )
+
+        if self.plot_tod and data.comm.world_rank == 0:
+            import matplotlib.pyplot as plt
+
+            fig, axs = plt.subplots(1, 2, figsize=(12, 5))
+            acc = 0
+            for i in range(ndet):
+                for j in range(nobs):
+                    block_size = self._mappraiser_blocksizes[i * nobs + j]
+                    slc = slice(acc, acc + block_size, 10)  # plot every 10th sample
+                    axs[0].plot(self._mappraiser_signal[slc], label=f"{i}_{j}")
+                    axs[1].plot(self._mappraiser_noise[slc], label=f"{i}_{j}")
+                    acc += block_size
+            for ax in axs:
+                ax.legend()
+            fig.tight_layout()
+            plt.savefig(os.path.join(params["path_output"], "signal_noise.png"))
 
         # Copy the pointing
 
