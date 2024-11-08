@@ -3,22 +3,24 @@ from enum import IntEnum, auto
 import numpy as np
 
 __all__ = [
-    "GapStrategy",
-    "PrecondType",
-    "SolverType",
-    "SIGNAL_TYPE",
-    "PIXEL_TYPE",
-    "WEIGHT_TYPE",
-    "INVTT_TYPE",
+    'GapStrategy',
+    'PrecondType',
+    'SolverType',
+    'SIGNAL_TYPE',
+    'INDEX_TYPE',
+    'WEIGHT_TYPE',
+    'INVTT_TYPE',
+    'META_ID_TYPE',
     # "TIMESTAMP_TYPE",
     # "PSD_TYPE",
 ]
 
 
 SIGNAL_TYPE = np.float64
-PIXEL_TYPE = np.int32
+INDEX_TYPE = np.int32
 WEIGHT_TYPE = np.float64
 INVTT_TYPE = np.float64
+META_ID_TYPE = np.uint64
 TIMESTAMP_TYPE = np.float64
 PSD_TYPE = np.float64
 

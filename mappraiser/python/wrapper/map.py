@@ -1,11 +1,10 @@
 import ctypes as ct
 import ctypes.util as ctu
 
-import numpy as np
 import numpy.ctypeslib as npc
 from mpi4py import MPI
 
-from .types import INVTT_TYPE, PIXEL_TYPE, SIGNAL_TYPE, WEIGHT_TYPE
+from .types import INDEX_TYPE, INVTT_TYPE, META_ID_TYPE, SIGNAL_TYPE, WEIGHT_TYPE
 
 __all__ = [
     'MLmap',
@@ -60,15 +59,15 @@ _mappraiser.MLmap.argtypes = [  # pyright: ignore
     ct.c_int,  # gap_stgy
     ct.c_bool,  # do_gap_filling
     ct.c_uint64,  # realization
-    npc.ndpointer(dtype=np.int32, ndim=1, flags='C_CONTIGUOUS'),  # data_size_proc
+    npc.ndpointer(dtype=INDEX_TYPE, ndim=1, flags='C_CONTIGUOUS'),  # data_size_proc
     ct.c_int,  # nb_blocks_loc
-    npc.ndpointer(dtype=np.int32, ndim=1, flags='C_CONTIGUOUS'),  # local_blocks_sizes
+    npc.ndpointer(dtype=INDEX_TYPE, ndim=1, flags='C_CONTIGUOUS'),  # local_blocks_sizes
     ct.c_double,  # sample_rate
-    npc.ndpointer(dtype=np.uint64, ndim=1, flags='C_CONTIGUOUS'),  # detindxs
-    npc.ndpointer(dtype=np.uint64, ndim=1, flags='C_CONTIGUOUS'),  # obsindxs
-    npc.ndpointer(dtype=np.uint64, ndim=1, flags='C_CONTIGUOUS'),  # telescopes
+    npc.ndpointer(dtype=META_ID_TYPE, ndim=1, flags='C_CONTIGUOUS'),  # detindxs
+    npc.ndpointer(dtype=META_ID_TYPE, ndim=1, flags='C_CONTIGUOUS'),  # obsindxs
+    npc.ndpointer(dtype=META_ID_TYPE, ndim=1, flags='C_CONTIGUOUS'),  # telescopes
     ct.c_int,  # Nnz
-    npc.ndpointer(dtype=PIXEL_TYPE, ndim=1, flags='C_CONTIGUOUS'),  # pixels
+    npc.ndpointer(dtype=INDEX_TYPE, ndim=1, flags='C_CONTIGUOUS'),  # pixels
     npc.ndpointer(dtype=WEIGHT_TYPE, ndim=1, flags='C_CONTIGUOUS'),  # pixweights
     npc.ndpointer(dtype=SIGNAL_TYPE, ndim=1, flags='C_CONTIGUOUS'),  # signal
     npc.ndpointer(dtype=SIGNAL_TYPE, ndim=1, flags='C_CONTIGUOUS'),  # noise
@@ -82,7 +81,6 @@ def MLmap(
     comm,
     params,
     data_size_proc,
-    nb_blocks_loc,
     local_blocks_sizes,
     detindxs,
     obsindxs,
@@ -121,7 +119,7 @@ def MLmap(
         params['fill_gaps'],
         params['realization'],
         data_size_proc,
-        nb_blocks_loc,
+        len(local_blocks_sizes),
         local_blocks_sizes,
         params['fsample'],
         detindxs,
