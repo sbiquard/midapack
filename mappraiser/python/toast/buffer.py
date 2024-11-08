@@ -1,60 +1,44 @@
-from dataclasses import InitVar, dataclass, fields
-from typing import Any
+from dataclasses import dataclass, fields
 
-from toast.data import Data
-from toast.utils import dtype_to_aligned
+import numpy as np
+import numpy.typing as npt
 
+from ..wrapper import INDEX_TYPE, INVTT_TYPE, META_ID_TYPE, SIGNAL_TYPE, WEIGHT_TYPE
+from .interface import ToastContainer
 
-@dataclass
-class Buffer:
-    raw: Any
-    wrapped: Any
-
-    @classmethod
-    def create(cls, dtype, n_elements: int):
-        storage, _ = dtype_to_aligned(dtype)
-        raw = storage.zeros(n_elements)
-        wrapped = raw.array()
-        return cls(raw, wrapped)
-
-    def __del__(self):
-        if self.raw is not None:
-            self.raw.clear()
-        del self.raw
-        del self.wrapped
+__all__ = ['MappraiserBuffers']
 
 
 @dataclass
 class MappraiserBuffers:
-    signal: Buffer | None = None
-    blocksizes: Buffer | None = None
-    detindxs: Buffer | None = None
-    obsindxs: Buffer | None = None
-    telescopes: Buffer | None = None
-    noise: Buffer | None = None
-    invtt: Buffer | None = None
-    tt: Buffer | None = None
-    pixels: Buffer | None = None
-    pixweights: Buffer | None = None
-    database: InitVar[Data | None] = None
+    local_blocksizes: npt.NDArray[INDEX_TYPE] | None = None
+    data_size_proc: npt.NDArray[INDEX_TYPE] | None = None
+    signal: npt.NDArray[SIGNAL_TYPE] | None = None
+    noise: npt.NDArray[SIGNAL_TYPE] | None = None
+    pixels: npt.NDArray[INDEX_TYPE] | None = None
+    pixweights: npt.NDArray[WEIGHT_TYPE] | None = None
+    invtt: npt.NDArray[INVTT_TYPE] | None = None
+    tt: npt.NDArray[INVTT_TYPE] | None = None
+    telescopes: npt.NDArray[META_ID_TYPE] | None = None
+    obsindxs: npt.NDArray[META_ID_TYPE] | None = None
+    detindxs: npt.NDArray[META_ID_TYPE] | None = None
 
-    def __post_init__(self, database):
-        """Initialize the buffers.
-
-        This is where the data staging happens.
+    def stage(self, ctnr: ToastContainer, pairdiff: bool, purge: bool = True) -> None:
+        """Stage (copy) TOAST data into the buffers.
 
         Args:
-            database (Data): The toast Data object containing the data.
+            ctnr: A ToastContainer instance wrapping the toast.Data object.
+            purge: Whether to purge the data from the toast.Data object after staging.
         """
-        if database is None:
-            return
+        n_blocks = ctnr.n_local_blocks
+        n_samples = ctnr.n_local_samples
+        data_size = ctnr.local_data_size()
+        self.data_size_proc = np.array(ctnr.allgather(data_size), dtype=INDEX_TYPE)
 
-        # Copy the data into the buffers
-        self.data_size_proc = None
-        self.n_local_blocks = None
-        raise NotImplementedError
+        # Stage the signal
+        self.signal = np.empty(data_size, dtype=SIGNAL_TYPE)
+        # TODO
 
     def __del__(self):
-        # `fields` does not return init-only fields, so we only get the Buffer fields
         for buffer in fields(self):
             del buffer

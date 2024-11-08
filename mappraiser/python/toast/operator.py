@@ -1,11 +1,10 @@
 from pathlib import Path
-from typing import override
 
 import astropy.units as u
 import tomlkit
 import traitlets
 
-from toast.data import Data as ToastData
+import toast
 from toast.observation import default_values as defaults
 from toast.ops.operator import Operator as ToastOperator
 from toast.ops.pixels_healpix import PixelsHealpix
@@ -16,6 +15,7 @@ from toast.utils import Logger
 
 from .. import wrapper as lib
 from .buffer import MappraiserBuffers
+from .interface import ToastContainer
 from .utils import log_time_memory
 
 __all__ = ['MapMaker', 'available']
@@ -59,6 +59,7 @@ class MapMaker(ToastOperator):
     output_dir = Unicode('.', help='Write output data products to this directory')
     pair_diff = Bool(False, help='Process differenced timestreams')
     plot_tod = Bool(False, help='Plot the signal+noise TOD after staging')
+    purge_det_data = Bool(True, help='Clear all observation detector data after staging')
     ref = Unicode('run0', help='Reference that is added to the name of the output maps')
     zero_noise = Bool(False, help='Fill the noise buffer with zero')
     zero_signal = Bool(False, help='Fill the signal buffer with zero')
@@ -86,6 +87,7 @@ class MapMaker(ToastOperator):
             msg = 'Mappraiser assumes that I, Q and U weights are provided'
             msg += f'but stokes_weights operator has {check.mode=!r}'
             raise RuntimeError(msg)
+        return check
 
     @traitlets.validate('det_mask')
     def _check_det_mask(self, proposal):
@@ -108,7 +110,6 @@ class MapMaker(ToastOperator):
             raise traitlets.TraitError('Shared flag mask should be a positive integer')
         return check
 
-    @override
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self._logprefix = 'Mappraiser:'
@@ -129,7 +130,7 @@ class MapMaker(ToastOperator):
             timer=self._timer,
         )
 
-    def _log_memory(self, data: ToastData, msg: str) -> None:
+    def _log_memory(self, data: toast.Data, msg: str) -> None:
         log_time_memory(
             data,
             prefix=self._logprefix,
@@ -138,32 +139,31 @@ class MapMaker(ToastOperator):
         )
 
     @function_timer
-    @override
-    def _exec(self, data: ToastData, detectors=None, **kwargs) -> None:
+    def _exec(self, data: toast.Data, detectors: list[str] | None = None, **kwargs) -> None:
         """Run mappraiser on the supplied data object"""
-        self._timer.start()
-
         if not available():
             raise RuntimeError('Mappraiser is either not installed or MPI is disabled')
 
-        if len(data.obs) == 0:
-            raise RuntimeError('Every supplied data object must contain at least one observation')
+        self._timer.start()
 
         # Setting up and staging the data
         self._log_memory(data, 'Before staging the data')
-        self._prepare(data)
-        self._buffers = MappraiserBuffers(database=data)
+        wrapped_data = self._prepare(data, detectors)
+        self._buffers.stage(wrapped_data, purge=self.purge_det_data)
         self._log_info('Staged data')
 
         # Call mappraiser
         self._log_memory(data, 'Before calling mappraiser')
-        self._make_maps()
+        self._make_maps(wrapped_data)
         self._log_info('Processed data')
 
-        return
-
-    def _prepare(self, data: ToastData) -> None:
+    @function_timer
+    def _prepare(self, data: toast.Data, detectors) -> ToastContainer:
         """Examine the data and determine quantities needed to set up the mappraiser run"""
+        # Check that we have at least one observation
+        if len(data.obs) == 0:
+            raise RuntimeError('Every supplied data object must contain at least one observation')
+
         # Get the global communicator
         self._comm = data.comm.comm_world
 
@@ -222,14 +222,30 @@ class MapMaker(ToastOperator):
             with open(self.output_dir / 'mappraiser_args_log.toml', 'w') as file:
                 tomlkit.dump(self.params, file, sort_keys=True)
 
-    def _make_maps(self):
+        # Wrap the TOAST Data container into our custom class
+        wrapped_data = ToastContainer(
+            data,
+            pair_diff=self.pair_diff,
+            det_selection=detectors,
+            det_data=self.det_data,
+            noise_data=self.noise_data,
+            noise_model=self.noise_model,
+            det_mask=self.det_mask,
+            det_flag_mask=self.det_flag_mask,
+            shared_flag_mask=self.shared_flag_mask,
+            det_flags=self.det_flags,
+            shared_flags=self.shared_flags,
+        )
+        return wrapped_data
+
+    @function_timer
+    def _make_maps(self, data: ToastContainer) -> None:
         """Make maps from buffered data"""
         lib.MLmap(
             self._comm,
             self.params,
             self._buffers.data_size_proc,
-            self._buffers.n_local_blocks,
-            self._buffers.blocksizes,
+            self._buffers.local_blocksizes,
             self._buffers.detindxs,
             self._buffers.obsindxs,
             self._buffers.telescopes,
@@ -242,11 +258,9 @@ class MapMaker(ToastOperator):
             self._buffers.tt,
         )
 
-    @override
     def _finalize(self, data, **kwargs):
         self.clear()
 
-    @override
     def _requires(self):
         req = {
             'meta': [],
@@ -264,7 +278,6 @@ class MapMaker(ToastOperator):
             req['detdata'].append(self.det_flags)
         return req
 
-    @override
     def _provides(self):
         # We do not provide any data back to the pipeline
         return {}
