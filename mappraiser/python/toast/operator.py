@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import override
 
 import astropy.units as u
 import tomlkit
@@ -139,12 +140,13 @@ class MapMaker(ToastOperator):
         )
 
     @function_timer
+    @override
     def _exec(self, data: toast.Data, detectors: list[str] | None = None, **kwargs) -> None:
         """Run mappraiser on the supplied data object"""
         if not available():
             raise RuntimeError('Mappraiser is either not installed or MPI is disabled')
 
-        self._timer.start()
+        self._timer.start()  # pyright: ignore[reportUnknownMemberType]
 
         # Setting up and staging the data
         self._log_memory(data, 'Before staging the data')
@@ -154,11 +156,11 @@ class MapMaker(ToastOperator):
 
         # Call mappraiser
         self._log_memory(data, 'Before calling mappraiser')
-        self._make_maps(wrapped_data)
+        self._make_maps()
         self._log_info('Processed data')
 
     @function_timer
-    def _prepare(self, data: toast.Data, detectors) -> ToastContainer:
+    def _prepare(self, data: toast.Data, detectors: list[str] | None) -> ToastContainer:
         """Examine the data and determine quantities needed to set up the mappraiser run"""
         # Check that we have at least one observation
         if len(data.obs) == 0:
@@ -213,19 +215,19 @@ class MapMaker(ToastOperator):
         )
 
         if 'fsample' not in self.params:
-            self.params['fsample'] = data.obs[0].telescope.focalplane.sample_rate.to_value(u.Hz)  # pyright: ignore
+            self.params['fsample'] = data.obs[0].telescope.focalplane.sample_rate.to_value(u.Hz)
 
         # Log the parameters that were used, creating the output directory if necessary
         self.output_dir = Path(self.output_dir)
         if data.comm.world_rank == 0:
             self.output_dir.mkdir(parents=True, exist_ok=True)
             with open(self.output_dir / 'mappraiser_args_log.toml', 'w') as file:
-                tomlkit.dump(self.params, file, sort_keys=True)
+                tomlkit.dump(self.params, file, sort_keys=True)  # pyright: ignore[reportUnknownMemberType]
 
         # Wrap the TOAST Data container into our custom class
         wrapped_data = ToastContainer(
             data,
-            pair_diff=self.pair_diff,
+            self.pair_diff,
             det_selection=detectors,
             det_data=self.det_data,
             noise_data=self.noise_data,
@@ -239,7 +241,7 @@ class MapMaker(ToastOperator):
         return wrapped_data
 
     @function_timer
-    def _make_maps(self, data: ToastContainer) -> None:
+    def _make_maps(self) -> None:
         """Make maps from buffered data"""
         lib.MLmap(
             self._comm,
@@ -258,9 +260,11 @@ class MapMaker(ToastOperator):
             self._buffers.tt,
         )
 
+    @override
     def _finalize(self, data, **kwargs):
         self.clear()
 
+    @override
     def _requires(self):
         req = {
             'meta': [],
@@ -278,6 +282,7 @@ class MapMaker(ToastOperator):
             req['detdata'].append(self.det_flags)
         return req
 
+    @override
     def _provides(self):
         # We do not provide any data back to the pipeline
         return {}

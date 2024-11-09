@@ -23,21 +23,27 @@ class MappraiserBuffers:
     obsindxs: npt.NDArray[META_ID_TYPE] | None = None
     detindxs: npt.NDArray[META_ID_TYPE] | None = None
 
-    def stage(self, ctnr: ToastContainer, pairdiff: bool, purge: bool = True) -> None:
+    def stage(self, ctnr: ToastContainer, purge: bool = True) -> None:
         """Stage (copy) TOAST data into the buffers.
 
         Args:
             ctnr: A ToastContainer instance wrapping the toast.Data object.
             purge: Whether to purge the data from the toast.Data object after staging.
         """
-        n_blocks = ctnr.n_local_blocks
-        n_samples = ctnr.n_local_samples
-        data_size = ctnr.local_data_size()
+        # n_blocks = ctnr.n_local_blocks
+        # n_samples = ctnr.n_local_samples
+        data_size = ctnr.local_data_size
+        # Communicate between processes to know the sizes on each of them
         self.data_size_proc = np.array(ctnr.allgather(data_size), dtype=INDEX_TYPE)
 
         # Stage the signal
-        self.signal = np.empty(data_size, dtype=SIGNAL_TYPE)
-        # TODO
+        self.signal = ctnr.signal
+        if purge:
+            ...
+        self.noise = ctnr.noise
+        if purge:
+            ...
+        assert self.data_size_proc == self.signal.size == self.noise.size
 
     def __del__(self):
         for buffer in fields(self):
