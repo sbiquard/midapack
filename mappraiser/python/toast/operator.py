@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import override
+from typing import final, override
 
 import astropy.units as u
 import tomlkit
@@ -27,6 +27,7 @@ def available():
     return lib.available
 
 
+@final
 @trait_docs
 class MapMaker(ToastOperator):
     """Operator that passes data to libmappraiser for map-making"""
@@ -151,7 +152,9 @@ class MapMaker(ToastOperator):
         # Setting up and staging the data
         self._log_memory(data, 'Before staging the data')
         wrapped_data = self._prepare(data, detectors)
-        self._buffers.stage(wrapped_data, purge=self.purge_det_data)
+        self._buffers.stage(
+            wrapped_data, self.pixel_pointing, self.stokes_weights, purge=self.purge_det_data
+        )
         self._log_info('Staged data')
 
         # Call mappraiser
@@ -228,6 +231,7 @@ class MapMaker(ToastOperator):
         wrapped_data = ToastContainer(
             data,
             self.pair_diff,
+            self.purge_det_data,
             det_selection=detectors,
             det_data=self.det_data,
             noise_data=self.noise_data,

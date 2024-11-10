@@ -7,8 +7,10 @@ import numpy.typing as npt
 from astropy import units as u
 
 import toast
-from mappraiser.python.wrapper.types import INDEX_TYPE, INVTT_TYPE, SIGNAL_TYPE, WEIGHT_TYPE
 from toast.observation import default_values as defaults
+from toast.ops import Operator, PixelsHealpix, StokesWeights
+
+from ..wrapper.types import INDEX_TYPE, INVTT_TYPE, SIGNAL_TYPE, WEIGHT_TYPE
 
 MappraiserDtype = SIGNAL_TYPE | WEIGHT_TYPE | INVTT_TYPE | INDEX_TYPE
 
@@ -17,6 +19,7 @@ MappraiserDtype = SIGNAL_TYPE | WEIGHT_TYPE | INVTT_TYPE | INDEX_TYPE
 class ObservationData:
     observation: toast.Observation
     pair_diff: bool
+    purge: bool
     det_selection: list[str] | None = None
 
     # fields that we want to copy
@@ -61,28 +64,42 @@ class ObservationData:
         assert a.shape[0] % 2 == 0  # pyright: ignore[reportAny]
         return (0.5 * (a[::2] - a[1::2])).astype(a.dtype)
 
-    @property
-    def signal(self) -> npt.NDArray[SIGNAL_TYPE]:
-        """Return the timestream data"""
+    def get_signal(self) -> npt.NDArray[SIGNAL_TYPE]:
         s = np.array(self.observation.detdata[self.det_data][self.dets, :], dtype=SIGNAL_TYPE)
+        if self.purge:
+            del self.observation.detdata[self.det_data]
         return self.do_pair_diff(s)
 
-    @property
-    def noise(self) -> npt.NDArray[SIGNAL_TYPE]:
-        """Return the noise data"""
+    def get_noise(self) -> npt.NDArray[SIGNAL_TYPE]:
         if self.noise_data is None:
             raise RuntimeError('Can not access noise without a field name')
         n = np.array(self.observation.detdata[self.noise_data][self.dets, :], dtype=SIGNAL_TYPE)
+        if self.purge:
+            del self.observation.detdata[self.noise_data]
         return self.do_pair_diff(n)
 
-    def get_psd_model(self):
-        """Returns frequencies and PSD values of the noise model."""
-        if self.noise_model is None:
-            raise ValueError('Noise model not provided.')
-        model = self.observation[self.noise_model]
-        freq = np.array([model.freq(det) for det in self.dets])
-        psd = np.array([model.psd(det) for det in self.dets])
-        return freq, psd
+    def get_indices(self, op: PixelsHealpix) -> npt.NDArray[INDEX_TYPE]:
+        i = np.array(self.observation[op.pixels], dtype=INDEX_TYPE)
+        if self.purge:
+            del self.observation[op.pixels]
+        # TODO: arrange the pixel indices for mappraiser + pairdiff
+        raise NotImplementedError
+
+    def get_weights(self, op: StokesWeights) -> npt.NDArray[WEIGHT_TYPE]:
+        w = np.array(self.observation[op.weights], dtype=WEIGHT_TYPE)
+        if self.purge:
+            del self.observation[op.weights]
+        # TODO: pairdiff
+        raise NotImplementedError
+
+    # def get_psd_model(self):
+    #     """Returns frequencies and PSD values of the noise model."""
+    #     if self.noise_model is None:
+    #         raise ValueError('Noise model not provided.')
+    #     model = self.observation[self.noise_model]
+    #     freq = np.array([model.freq(det) for det in self.dets])
+    #     psd = np.array([model.psd(det) for det in self.dets])
+    #     return freq, psd
 
 
 @dataclass
@@ -91,6 +108,7 @@ class ToastContainer:
 
     data: toast.Data
     pair_diff: bool
+    purge: bool
     det_selection: list[str] | None = None
 
     # fields that we want to copy
@@ -105,13 +123,17 @@ class ToastContainer:
     det_flags: str = defaults.det_flags
     shared_flags: str = defaults.shared_flags
 
-    @property
-    def signal(self) -> npt.NDArray[SIGNAL_TYPE]:
-        return np.concatenate([ob.signal for ob in self.obs], axis=None)
+    def get_signal(self) -> npt.NDArray[SIGNAL_TYPE]:
+        return np.concatenate([ob.get_signal() for ob in self._obs], axis=None)
 
-    @property
-    def noise(self) -> npt.NDArray[SIGNAL_TYPE]:
-        return np.concatenate([ob.noise for ob in self.obs], axis=None)
+    def get_noise(self) -> npt.NDArray[SIGNAL_TYPE]:
+        return np.concatenate([ob.get_noise() for ob in self._obs], axis=None)
+
+    def get_pointing_indices(self, op: PixelsHealpix) -> npt.NDArray[INDEX_TYPE]:
+        return np.concatenate([ob.get_indices(op) for ob in self._synthesized_obs(op)], axis=None)
+
+    def get_pointing_weights(self, op: StokesWeights) -> npt.NDArray[WEIGHT_TYPE]:
+        return np.concatenate([ob.get_weights(op) for ob in self._synthesized_obs(op)], axis=None)
 
     def allgather(self, value: Any) -> list[Any]:  # pyright: ignore[reportAny]
         assert (comm := self.data.comm.comm_world) is not None
@@ -120,7 +142,7 @@ class ToastContainer:
     @property
     def n_local_blocks(self) -> int:
         """Compute the number of local blocks, summed over all observations"""
-        s = sum(len(ob.dets) for ob in self.obs)
+        s = sum(len(ob.dets) for ob in self._obs)
         if self.pair_diff:
             return s // 2
         return s
@@ -128,22 +150,23 @@ class ToastContainer:
     @property
     def n_local_samples(self) -> int:
         """Compute the number of local samples, summed over all observations"""
-        return sum(ob.samples for ob in self.obs)
+        return sum(ob.samples for ob in self._obs)
 
     @property
     def local_data_size(self) -> int:
         """Compute the size of the local signal buffer"""
-        s = sum(ob.samples * len(ob.dets) for ob in self.obs)
+        s = sum(ob.samples * len(ob.dets) for ob in self._obs)
         if self.pair_diff:
             return s // 2
         return s
 
     @ft.cached_property
-    def obs(self) -> list[ObservationData]:
+    def _obs(self) -> list[ObservationData]:
         return [
             ObservationData(
                 observation=ob,
                 pair_diff=self.pair_diff,
+                purge=self.purge,
                 det_selection=self.det_selection,
                 det_data=self.det_data,
                 noise_data=self.noise_data,
@@ -156,3 +179,11 @@ class ToastContainer:
             )
             for ob in self.data.obs
         ]
+
+    def _synthesized_obs(self, operator: Operator | None = None) -> list[ObservationData]:
+        def synthesize(ob: ObservationData):
+            if operator is not None:
+                _ = operator.apply(self.data.select(obs_uid=ob.observation.uid), detectors=ob.dets)
+            return ob
+
+        return [synthesize(ob) for ob in self._obs]

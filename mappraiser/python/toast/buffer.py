@@ -3,6 +3,8 @@ from dataclasses import dataclass, fields
 import numpy as np
 import numpy.typing as npt
 
+from toast.ops import PixelsHealpix, StokesWeights
+
 from ..wrapper import INDEX_TYPE, INVTT_TYPE, META_ID_TYPE, SIGNAL_TYPE, WEIGHT_TYPE
 from .interface import ToastContainer
 
@@ -23,7 +25,12 @@ class MappraiserBuffers:
     obsindxs: npt.NDArray[META_ID_TYPE] | None = None
     detindxs: npt.NDArray[META_ID_TYPE] | None = None
 
-    def stage(self, ctnr: ToastContainer, purge: bool = True) -> None:
+    def stage(
+        self,
+        ctnr: ToastContainer,
+        pixel_op: PixelsHealpix,
+        weight_op: StokesWeights,
+    ) -> None:
         """Stage (copy) TOAST data into the buffers.
 
         Args:
@@ -36,13 +43,14 @@ class MappraiserBuffers:
         # Communicate between processes to know the sizes on each of them
         self.data_size_proc = np.array(ctnr.allgather(data_size), dtype=INDEX_TYPE)
 
-        # Stage the signal
-        self.signal = ctnr.signal
-        if purge:
-            ...
-        self.noise = ctnr.noise
-        if purge:
-            ...
+        # Signal
+        self.signal = ctnr.get_signal()
+        # Noise
+        self.noise = ctnr.get_noise()
+        # Pointing
+        self.pixels = ctnr.get_pointing_indices(pixel_op)
+        self.pixweights = ctnr.get_pointing_weights(weight_op)
+        # Check that the sizes are consistent
         assert self.data_size_proc == self.signal.size == self.noise.size
 
     def __del__(self):
