@@ -5,7 +5,7 @@ import astropy.units as u
 import tomlkit
 import traitlets
 
-import toast
+from toast.data import Data as ToastData
 from toast.observation import default_values as defaults
 from toast.ops.operator import Operator as ToastOperator
 from toast.ops.pixels_healpix import PixelsHealpix
@@ -20,6 +20,8 @@ from .interface import ToastContainer
 from .utils import log_time_memory
 
 __all__ = ['MapMaker', 'available']
+
+type ObservationKeysDict = dict[str, list[str]]
 
 
 def available():
@@ -118,6 +120,8 @@ class MapMaker(ToastOperator):
         self._logger = Logger.get()
         self._timer = Timer()
         self._buffers = MappraiserBuffers()  # None
+        self._comm = None  # The MPI communicator
+        self._nnz = 3  # Number of Stokes parameters
 
     def clear(self) -> None:
         del self._buffers
@@ -128,11 +132,11 @@ class MapMaker(ToastOperator):
     def _log_info(self, msg: str) -> None:
         self._logger.info_rank(
             f'{self._logprefix} {msg} in',
-            comm=self._comm,
+            comm=self._comm,  # None is also a valid argument here
             timer=self._timer,
         )
 
-    def _log_memory(self, data: toast.Data, msg: str) -> None:
+    def _log_memory(self, data: ToastData, msg: str) -> None:
         log_time_memory(
             data,
             prefix=self._logprefix,
@@ -142,7 +146,7 @@ class MapMaker(ToastOperator):
 
     @function_timer
     @override
-    def _exec(self, data: toast.Data, detectors: list[str] | None = None, **kwargs) -> None:
+    def _exec(self, data: ToastData, detectors: list[str] | None = None, **kwargs) -> None:
         """Run mappraiser on the supplied data object"""
         if not available():
             raise RuntimeError('Mappraiser is either not installed or MPI is disabled')
@@ -152,9 +156,7 @@ class MapMaker(ToastOperator):
         # Setting up and staging the data
         self._log_memory(data, 'Before staging the data')
         wrapped_data = self._prepare(data, detectors)
-        self._buffers.stage(
-            wrapped_data, self.pixel_pointing, self.stokes_weights, purge=self.purge_det_data
-        )
+        self._buffers.stage(wrapped_data, self.pixel_pointing, self.stokes_weights)
         self._log_info('Staged data')
 
         # Call mappraiser
@@ -163,7 +165,7 @@ class MapMaker(ToastOperator):
         self._log_info('Processed data')
 
     @function_timer
-    def _prepare(self, data: toast.Data, detectors: list[str] | None) -> ToastContainer:
+    def _prepare(self, data: ToastData, detectors: list[str] | None) -> ToastContainer:
         """Examine the data and determine quantities needed to set up the mappraiser run"""
         # Check that we have at least one observation
         if len(data.obs) == 0:
@@ -173,11 +175,8 @@ class MapMaker(ToastOperator):
         self._comm = data.comm.comm_world
 
         # Check if the noise data is available and set dependent traits
-        if self.noise_data is None:
-            self.noiseless = True
-
-        if self.noiseless:
-            self.binned = True
+        if self.noise_data is None:  # pyright: ignore[reportUnnecessaryComparison]
+            self.zero_noise = True
 
         if self.binned:
             self.lagmax = 1
@@ -265,28 +264,28 @@ class MapMaker(ToastOperator):
         )
 
     @override
-    def _finalize(self, data, **kwargs):
+    def _finalize(self, data: ToastData, **kwargs) -> None:
         self.clear()
 
     @override
-    def _requires(self):
+    def _requires(self) -> ObservationKeysDict:
         req = {
             'meta': [],
             'detdata': [self.det_data],
             'intervals': [],
             'shared': [],
         }
-        if self.noise_data is not None:
+        if self.noise_data is not None:  # pyright: ignore[reportUnnecessaryComparison]
             req['detdata'].append(self.noise_data)
-        if self.noise_model is not None:
+        if self.noise_model is not None:  # pyright: ignore[reportUnnecessaryComparison]
             req['meta'].append(self.noise_model)
-        if self.shared_flags is not None:
+        if self.shared_flags is not None:  # pyright: ignore[reportUnnecessaryComparison]
             req['shared'].append(self.shared_flags)
-        if self.det_flags is not None:
+        if self.det_flags is not None:  # pyright: ignore[reportUnnecessaryComparison]
             req['detdata'].append(self.det_flags)
         return req
 
     @override
-    def _provides(self):
+    def _provides(self) -> ObservationKeysDict:
         # We do not provide any data back to the pipeline
         return {}

@@ -35,6 +35,10 @@ class ObservationData:
     shared_flags: str = defaults.shared_flags
 
     @property
+    def nnz(self) -> int:
+        return 2 if self.pair_diff else 3
+
+    @property
     def samples(self) -> int:
         return self.observation.n_local_samples
 
@@ -44,13 +48,16 @@ class ObservationData:
         dets = self.observation.select_local_detectors(
             selection=self.det_selection, flagmask=self.det_mask
         )
-        # TODO: should we return only half of the detectors?
         return dets
 
     @property
+    def even_dets(self) -> list[str]:
+        """Return a list of the even detector names"""
+        return self.dets[::2]
+
+    @property
     def focalplane(self) -> toast.Focalplane:
-        assert isinstance(fp := self.observation.telescope.focalplane, toast.Focalplane)
-        return fp
+        return self.observation.telescope.focalplane
 
     @property
     def sample_rate(self) -> float:
@@ -65,32 +72,36 @@ class ObservationData:
         return (0.5 * (a[::2] - a[1::2])).astype(a.dtype)
 
     def get_signal(self) -> npt.NDArray[SIGNAL_TYPE]:
-        s = np.array(self.observation.detdata[self.det_data][self.dets, :], dtype=SIGNAL_TYPE)
+        signal = np.array(self.observation.detdata[self.det_data][self.dets, :], dtype=SIGNAL_TYPE)
         if self.purge:
             del self.observation.detdata[self.det_data]
-        return self.do_pair_diff(s)
+        return self.do_pair_diff(signal)
 
     def get_noise(self) -> npt.NDArray[SIGNAL_TYPE]:
         if self.noise_data is None:
             raise RuntimeError('Can not access noise without a field name')
-        n = np.array(self.observation.detdata[self.noise_data][self.dets, :], dtype=SIGNAL_TYPE)
+        noise = np.array(self.observation.detdata[self.noise_data][self.dets, :], dtype=SIGNAL_TYPE)
         if self.purge:
             del self.observation.detdata[self.noise_data]
-        return self.do_pair_diff(n)
+        return self.do_pair_diff(noise)
 
     def get_indices(self, op: PixelsHealpix) -> npt.NDArray[INDEX_TYPE]:
-        i = np.array(self.observation[op.pixels], dtype=INDEX_TYPE)
+        # When doing pair differencing, we get the indices from the even detectors
+        dets = self.even_dets if self.pair_diff else self.dets
+        indices = np.array(self.observation[op.pixels][dets, :], dtype=INDEX_TYPE)
         if self.purge:
             del self.observation[op.pixels]
-        # TODO: arrange the pixel indices for mappraiser + pairdiff
-        raise NotImplementedError
+        # Arrange the pixel indices for Mappraiser
+        indices = np.repeat(indices, nnz := self.nnz) * nnz
+        for i in range(nnz):
+            indices[i::nnz] += i
+        return indices
 
     def get_weights(self, op: StokesWeights) -> npt.NDArray[WEIGHT_TYPE]:
-        w = np.array(self.observation[op.weights], dtype=WEIGHT_TYPE)
+        weights = np.array(self.observation[op.weights][self.dets, :], dtype=WEIGHT_TYPE)
         if self.purge:
             del self.observation[op.weights]
-        # TODO: pairdiff
-        raise NotImplementedError
+        return self.do_pair_diff(weights)
 
     # def get_psd_model(self):
     #     """Returns frequencies and PSD values of the noise model."""
