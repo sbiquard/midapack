@@ -217,7 +217,7 @@ class MapMaker(ToastOperator):
         )
 
         if 'fsample' not in self.params:
-            self.params['fsample'] = data.obs[0].telescope.focalplane.sample_rate.to_value(u.Hz)
+            self.params['fsample'] = data.obs[0].telescope.focalplane.sample_rate.to_value(u.Hz)  # pyright: ignore[reportAttributeAccessIssue]
 
         # Log the parameters that were used, creating the output directory if necessary
         self.output_dir = Path(self.output_dir)

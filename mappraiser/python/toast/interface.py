@@ -62,7 +62,7 @@ class ObservationData:
     @property
     def sample_rate(self) -> float:
         """Return the sampling rate (in Hz) of the data"""
-        return self.focalplane.sample_rate.to_value(u.Hz)
+        return self.focalplane.sample_rate.to_value(u.Hz)  # pyright: ignore[reportOptionalMemberAccess,reportAttributeAccessIssue]
 
     def do_pair_diff[T: MappraiserDtype](self, a: npt.NDArray[T]) -> npt.NDArray[T]:
         if not self.pair_diff:
