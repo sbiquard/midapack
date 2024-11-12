@@ -3,8 +3,7 @@ include = ["mappraiser/python"]
 exclude = ["**/workflow", "**/__pycache__"]
 ignore = ["**/mappraiser.py", "**/mappraiser_test.py"]
 
-reportMissingImports = "error"
-reportMissingTypeStubs = false
+typeCheckingMode = "standard"
 
 pythonVersion = "3.12"
 pythonPlatform = "Linux"
