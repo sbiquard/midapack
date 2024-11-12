@@ -41,8 +41,8 @@ def _encode_comm(comm):
 # MLmap routine
 ############################################################
 
-_mappraiser.MLmap.restype = None  # pyright: ignore
-_mappraiser.MLmap.argtypes = [  # pyright: ignore
+_mappraiser.MLmap.restype = None  # pyright: ignore[reportOptionalMemberAccess]
+_mappraiser.MLmap.argtypes = [  # pyright: ignore[reportOptionalMemberAccess]
     MPI_Comm,  # comm
     ct.c_char_p,  # outpath
     ct.c_char_p,  # ref
@@ -101,7 +101,7 @@ def MLmap(
 
     comm.Barrier()
 
-    _mappraiser.MLmap(  # pyright: ignore
+    _mappraiser.MLmap(  # pyright: ignore[reportOptionalMemberAccess]
         _encode_comm(comm),
         outpath,
         ref,
