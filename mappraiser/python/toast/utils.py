@@ -6,7 +6,7 @@ from toast.ops.memory_counter import MemoryCounter
 from toast.utils import Logger, memreport
 
 
-class UnreliableFit(BaseException):
+class UnreliableFit(Exception):
     """Raised when the covariance matrix of the fit is poorly conditioned"""
 
 
