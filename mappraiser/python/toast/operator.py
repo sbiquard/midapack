@@ -18,7 +18,7 @@ from toast.utils import Logger
 from .. import wrapper as lib
 from .buffer import MappraiserBuffers
 from .interface import ToastContainer
-from .utils import log_time_memory
+from .utils import estimate_psd, interpolate_psd, log_time_memory
 
 __all__ = ['MapMaker', 'available']
 
@@ -274,7 +274,8 @@ class MapMaker(ToastOperator):
             # TODO: finish this part
             if self.noise_model is None:
                 # estimate the noise covariance from the data
-                psd = estimate_psd(noise, block_sizes, rate=self.fsample)
+                psd, success = estimate_psd(noise, block_sizes, rate=self.fsample)
+                # TODO: handle blocks where the estimation failed
             else:
                 # use an existing Noise model
                 freq, psd = ctnr.get_psd_model()
