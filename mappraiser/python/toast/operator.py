@@ -296,7 +296,7 @@ class MapMaker(ToastOperator):
             obsindxs=obsindxs,
             detindxs=detindxs,
         )
-        self._buffers.check()
+        self._buffers.enforce_contiguous()
 
         # if self.estimate_psd:
         #     # Compute autocorrelation from the data
