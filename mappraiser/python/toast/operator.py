@@ -3,9 +3,11 @@ from typing import final, override
 
 import astropy.units as u
 import numpy as np
+import numpy.typing as npt
 import tomlkit
 import traitlets
 
+from mappraiser.python.wrapper.types import INDEX_TYPE, SIGNAL_TYPE
 from toast.data import Data as ToastData
 from toast.observation import default_values as defaults
 from toast.ops.operator import Operator as ToastOperator
@@ -18,7 +20,7 @@ from toast.utils import Logger
 from .. import wrapper as lib
 from .buffer import MappraiserBuffers
 from .interface import ToastContainer
-from .utils import estimate_psd, interpolate_psd, log_time_memory
+from .utils import effective_ntt, estimate_psd, log_time_memory, next_fast_fft_size, psd_to_invntt
 
 __all__ = ['MapMaker', 'available']
 
@@ -246,6 +248,7 @@ class MapMaker(ToastOperator):
         # Get data distribution information
         n_blocks = ctnr.n_local_blocks
         block_sizes = ctnr.local_block_sizes
+        assert n_blocks == len(block_sizes)
         data_size = ctnr.local_data_size
         data_size_proc = np.array(ctnr.allgather(data_size), dtype=lib.INDEX_TYPE)
 
@@ -263,25 +266,7 @@ class MapMaker(ToastOperator):
         weights = ctnr.get_pointing_weights(self.stokes_weights)
 
         # Inverse noise covariance
-        if self.binned:
-            # we are making a binned map, so lagmax is 1
-            invntt = np.ones(n_blocks, dtype=lib.INVTT_TYPE)
-            tt = invntt
-        elif self.lagmax > any(block_sizes):
-            msg = 'Maximum lag should be less than the number of samples of any data block'
-            raise RuntimeError(msg)
-        else:
-            # TODO: finish this part
-            if self.noise_model is None:
-                # estimate the noise covariance from the data
-                psd, success = estimate_psd(noise, block_sizes, rate=self.fsample)
-                # TODO: handle blocks where the estimation failed
-            else:
-                # use an existing Noise model
-                freq, psd = ctnr.get_psd_model()
-                psd = interpolate_psd(freq, psd, rate=self.fsample)
-            invntt = psd_to_invntt(psd, self.lagmax)
-            tt = ...
+        invntt, ntt = self._get_invntt(ctnr, noise, block_sizes)
 
         self._buffers = MappraiserBuffers(
             local_blocksizes=block_sizes,
@@ -290,92 +275,51 @@ class MapMaker(ToastOperator):
             noise=noise,
             pixels=pixels,
             pixweights=weights,
-            invtt=invntt,
-            tt=tt,
+            invntt=invntt,
+            ntt=ntt,
             telescopes=telescopes,
             obsindxs=obsindxs,
             detindxs=detindxs,
         )
         self._buffers.enforce_contiguous()
 
-        # if self.estimate_psd:
-        #     # Compute autocorrelation from the data
-        #     ob_uids = [ob.uid for ob in data.obs]
-        #     det_names = all_dets if not self.pair_diff else [name[:-2] for name in all_dets[::2]]
-        #     assert nobs == len(ob_uids)
-        #     assert ndet == len(det_names)
-        #     compute_autocorrelations(
-        #         ob_uids,
-        #         det_names,
-        #         self._mappraiser_noise,
-        #         self._mappraiser_blocksizes,
-        #         lambda_,
-        #         fsample,
-        #         self._mappraiser_invtt,
-        #         self._mappraiser_tt,
-        #         libmappraiser.INVTT_TYPE,
-        #         apod_window_type=self.apod_window_type,
-        #         print_info=(data.comm.world_rank == 0),
-        #         save_psd=(self.save_psd and data.comm.world_rank == 0),
-        #         save_dir=os.path.join(params['path_output'], 'psd_fits'),
-        #     )
-        #     return
+    def _get_invntt(
+        self,
+        ctnr: ToastContainer,
+        noise: npt.NDArray[SIGNAL_TYPE],
+        block_sizes: npt.NDArray[INDEX_TYPE],
+    ) -> tuple[npt.NDArray[lib.INVTT_TYPE], npt.NDArray[lib.INVTT_TYPE]]:
+        if self.lagmax > any(block_sizes):
+            msg = 'Maximum lag should be less than the number of samples of any data block'
+            raise RuntimeError(msg)
+        invntt = np.empty((len(block_sizes), self.lagmax), lib.INVTT_TYPE)
+        ntt = np.empty_like(invntt)
+        if self.binned:
+            # uniform weighting
+            invntt.fill(1)
+            ntt.fill(1)
+        elif self.lagmax == 1:
+            # simply use the variance of each block of the noise data
+            # TODO: is the noise model is provided, use its 'noise weights' instead?
+            acc = 0
+            for i, block_size in enumerate(block_sizes):
+                tod = noise[acc : acc + block_size]
+                invntt[i], ntt[i] = 1 / (v := np.var(tod)), v
+                acc += block_size
+        else:
+            fft_size = max(next_fast_fft_size(block_size) for block_size in block_sizes)
+            if self.noise_model is None:
+                # estimate the noise covariance from the data
+                psds, success = estimate_psd(noise, block_sizes, fft_size, rate=self.fsample)
+                # TODO: handle blocks where the estimation failed
+            else:
+                # interpolate the PSD from an existing Noise model
+                psds = ctnr.get_interp_psds(fft_size, rate=self.fsample)
+            invntt = psd_to_invntt(psds, self.lagmax)
+            ntt = effective_ntt(invntt, fft_size)
 
-        # # Use existing noise model instead of estimating from the data
-
-        # def _slice(idet):
-        #     return slice(
-        #         (idet * nobs + iob) * lambda_,
-        #         (idet * nobs + iob) * lambda_ + lambda_,
-        #     )
-
-        # def _get_freq_psd(model, det):
-        #     freq = model.freq(det).to_value(u.Hz)
-        #     psd = model.psd(det).to_value(u.K**2 * u.second)
-        #     return freq, psd
-
-        # def _populate_buffers(idet, psd):
-        #     ipsd = 1 / psd
-        #     ipsd[0] = 0
-        #     slc = _slice(idet)
-        #     self._mappraiser_invtt[slc] = psd_to_autocorr(ipsd, lambda_, apo=True)
-        #     self._mappraiser_tt[slc] = psd_to_autocorr(psd, lambda_, apo=True)
-
-        # for iob, ob in enumerate(data.obs):
-        #     # Get the fitted noise object for this observation.
-        #     model = ob[self.noise_model]
-        #     nsamp = ob.n_local_samples
-        #     if lambda_ > nsamp:
-        #         msg = 'Maximum correlation length should be less than the number of samples'
-        #         msg += f' (got lambda={lambda_}, nsamp={nsamp})'
-        #         raise RuntimeError(msg)
-        #     fft_size = next_fast_fft_size(nsamp)
-        #     local_dets: list[str] = ob.select_local_detectors(flagmask=self.det_mask)
-        #     if self.pair_diff:
-        #         for idet, (det1, det2) in enumerate(pairwise(local_dets)):
-        #             if lambda_ == 1:
-        #                 w1 = model.detector_weight(det1)
-        #                 w2 = model.detector_weight(det2)
-        #                 w = w1 + w2  # assume no correlation between detectors
-        #                 self._mappraiser_invtt[idet * nobs + iob] = w.value
-        #                 self._mappraiser_tt[idet * nobs + iob] = 1 / w.value
-        #             else:
-        #                 freq1, psd1 = _get_freq_psd(model, det1)
-        #                 freq2, psd2 = _get_freq_psd(model, det2)
-        #                 psd1 = interpolate_psd(freq1, psd1, fft_size=fft_size, rate=fsample)
-        #                 psd2 = interpolate_psd(freq2, psd2, fft_size=fft_size, rate=fsample)
-        #                 psd = psd1 + psd2  # assume no correlation between detectors
-        #                 _populate_buffers(idet, psd)
-        #     else:
-        #         for idet, det in enumerate(local_dets):
-        #             if lambda_ == 1:
-        #                 w = model.detector_weight(det)
-        #                 self._mappraiser_invtt[idet * nobs + iob] = w.value
-        #                 self._mappraiser_tt[idet * nobs + iob] = 1 / w.value
-        #             else:
-        #                 freq, psd = _get_freq_psd(model, det)
-        #                 psd = interpolate_psd(freq, psd, fft_size=fft_size, rate=fsample)
-        #                 _populate_buffers(idet, psd)
+        # Ultimately we want 1-d buffers
+        return invntt.ravel(), ntt.ravel()
 
     @function_timer
     def _make_maps(self) -> None:
@@ -393,8 +337,8 @@ class MapMaker(ToastOperator):
             self._buffers.pixweights,
             self._buffers.signal,
             self._buffers.noise,
-            self._buffers.invtt,
-            self._buffers.tt,
+            self._buffers.invntt,
+            self._buffers.ntt,
         )
 
     @override
