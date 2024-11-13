@@ -12,6 +12,7 @@ from toast.ops import Operator, PixelsHealpix, StokesWeights
 from toast.utils import name_UID
 
 from ..wrapper.types import INDEX_TYPE, INVTT_TYPE, META_ID_TYPE, SIGNAL_TYPE, WEIGHT_TYPE
+from .utils import interpolate_psd
 
 MappraiserDtype = SIGNAL_TYPE | WEIGHT_TYPE | INVTT_TYPE | INDEX_TYPE
 
@@ -26,7 +27,7 @@ class ObservationData:
     # fields that we want to copy
     det_data: str = defaults.det_data
     noise_data: str | None = 'noise'
-    noise_model: str = defaults.noise_model
+    noise_model: str | None = defaults.noise_model
 
     # flagging
     det_mask: int = defaults.det_mask_nonscience
@@ -114,14 +115,19 @@ class ObservationData:
             del self.observation[op.weights]
         return self.do_pair_diff(weights)
 
-    # def get_psd_model(self):
-    #     """Returns frequencies and PSD values of the noise model."""
-    #     if self.noise_model is None:
-    #         raise ValueError('Noise model not provided.')
-    #     model = self.observation[self.noise_model]
-    #     freq = np.array([model.freq(det) for det in self.dets])
-    #     psd = np.array([model.psd(det) for det in self.dets])
-    #     return freq, psd
+    def get_interp_psds(self, fft_size: int, rate: float = 1.0):
+        """Return a 2-d array of interpolated PSDs for the selected detectors"""
+        if self.noise_model is None:
+            raise ValueError('Noise model not provided')
+        # TODO: pair differencing
+        model = self.observation[self.noise_model]
+        psds = np.array(
+            [
+                interpolate_psd(model.freq(det), model.psd(det), fft_size=fft_size, rate=rate)
+                for det in self.sdets
+            ]
+        )
+        return psds
 
 
 @dataclass
@@ -136,7 +142,7 @@ class ToastContainer:
     # fields that we want to copy
     det_data: str = defaults.det_data
     noise_data: str | None = 'noise'
-    noise_model: str = defaults.noise_model
+    noise_model: str | None = defaults.noise_model
 
     # flagging
     det_mask: int = defaults.det_mask_nonscience
@@ -156,6 +162,12 @@ class ToastContainer:
 
     def get_pointing_weights(self, op: StokesWeights) -> npt.NDArray[WEIGHT_TYPE]:
         return np.concatenate([ob.get_weights(op) for ob in self._synthesized_obs(op)], axis=None)
+
+    def get_interp_psds(self, fft_size: int, rate: float = 1.0) -> npt.NDArray:
+        """Return a 2-d array of interpolated PSDs for the selected detectors"""
+        if self.noise_model is None:
+            raise ValueError('Noise model not provided')
+        return np.vstack([ob.get_interp_psds(fft_size, rate) for ob in self._obs])
 
     def allgather(self, value: Any) -> list[Any]:
         assert (comm := self.data.comm.comm_world) is not None
