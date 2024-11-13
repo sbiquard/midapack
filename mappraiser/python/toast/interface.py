@@ -1,6 +1,6 @@
 import functools as ft
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 import numpy.typing as npt
@@ -15,6 +15,7 @@ from ..wrapper.types import INDEX_TYPE, INVTT_TYPE, META_ID_TYPE, SIGNAL_TYPE, W
 from .utils import interpolate_psd
 
 MappraiserDtype = SIGNAL_TYPE | WEIGHT_TYPE | INVTT_TYPE | INDEX_TYPE
+ValidPairDiffTransform = Literal['half-sub', 'add']
 
 
 @dataclass
@@ -74,18 +75,26 @@ class ObservationData:
     def detector_uids(self) -> npt.NDArray[META_ID_TYPE]:
         return np.array([name_UID(det, int64=True) for det in self.sdets], dtype=META_ID_TYPE)
 
-    def do_pair_diff[T: MappraiserDtype](self, a: npt.NDArray[T]) -> npt.NDArray[T]:
+    def transform_pairs[T: MappraiserDtype](
+        self, a: npt.NDArray[T], operation: ValidPairDiffTransform = 'half-sub'
+    ) -> npt.NDArray[T]:
         if not self.pair_diff:
             return a
         # check that there is an even number of detectors
         assert a.shape[0] % 2 == 0
-        return (0.5 * (a[::2] - a[1::2])).astype(a.dtype)
+        if operation == 'half-sub':
+            transformed = 0.5 * (a[::2] - a[1::2])
+        elif operation == 'add':
+            transformed = a[::2] + a[1::2]
+        else:
+            raise ValueError(f'Invalid operation {operation!r}')
+        return transformed.astype(a.dtype)
 
     def get_signal(self) -> npt.NDArray[SIGNAL_TYPE]:
         signal = np.array(self.observation.detdata[self.det_data][self.sdets, :], dtype=SIGNAL_TYPE)
         if self.purge:
             del self.observation.detdata[self.det_data]
-        return self.do_pair_diff(signal)
+        return self.transform_pairs(signal)
 
     def get_noise(self) -> npt.NDArray[SIGNAL_TYPE]:
         if self.noise_data is None:
@@ -95,7 +104,7 @@ class ObservationData:
         )
         if self.purge:
             del self.observation.detdata[self.noise_data]
-        return self.do_pair_diff(noise)
+        return self.transform_pairs(noise)
 
     def get_indices(self, op: PixelsHealpix) -> npt.NDArray[INDEX_TYPE]:
         # When doing pair differencing, we get the indices from the even detectors
@@ -113,21 +122,27 @@ class ObservationData:
         weights = np.array(self.observation[op.weights][self.sdets, :], dtype=WEIGHT_TYPE)
         if self.purge:
             del self.observation[op.weights]
-        return self.do_pair_diff(weights)
+        return self.transform_pairs(weights)
 
     def get_interp_psds(self, fft_size: int, rate: float = 1.0):
         """Return a 2-d array of interpolated PSDs for the selected detectors"""
         if self.noise_model is None:
             raise ValueError('Noise model not provided')
-        # TODO: pair differencing
         model = self.observation[self.noise_model]
         psds = np.array(
             [
-                interpolate_psd(model.freq(det), model.psd(det), fft_size=fft_size, rate=rate)
+                interpolate_psd(
+                    model.freq(det).to_value(u.Hz),  # pyright: ignore[reportAttributeAccessIssue]
+                    model.psd(det).to_value(u.K**2 * u.second),  # pyright: ignore[reportAttributeAccessIssue]
+                    fft_size=fft_size,
+                    rate=rate,
+                )
                 for det in self.sdets
             ]
         )
-        return psds
+        # Add the PSDs of the detectors in a pair when doing pair differencing
+        # This means that we assume no correlations between them
+        return self.transform_pairs(psds, operation='add')
 
 
 @dataclass
