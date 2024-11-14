@@ -197,6 +197,8 @@ def _get_kernel(n_tt: npt.NDArray[lib.INVTT_TYPE], size: int) -> npt.NDArray[lib
 def effective_ntt(
     invntt: npt.NDArray[lib.INVTT_TYPE], fft_size: int
 ) -> npt.NDArray[lib.INVTT_TYPE]:
+    func = np.vectorize(folded_psd, signature='(m),()->(n)')
+    effective_psd = func(invntt, fft_size)
     lagmax = invntt.shape[-1]
-    effective_psd = folded_psd(invntt, fft_size)
-    return psd_to_ntt(effective_psd, lagmax)
+    ntt_eff = psd_to_ntt(effective_psd, lagmax)
+    return ntt_eff
