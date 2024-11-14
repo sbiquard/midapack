@@ -8,19 +8,17 @@ from .types import INDEX_TYPE, INVTT_TYPE, META_ID_TYPE, SIGNAL_TYPE, WEIGHT_TYP
 
 __all__ = [
     'MLmap',
-    'available',
 ]
-
 
 _mappraiser = None
 try:
     _mappraiser = ct.CDLL('libmappraiser.so')
 except OSError:
     path = ctu.find_library('mappraiser')
-    if path is not None:
-        _mappraiser = ct.CDLL(path)
-
-available = _mappraiser is not None
+    if path is None:
+        # Mappraiser was not found in the system
+        raise ImportError('Mappraiser library not found')
+    _mappraiser = ct.CDLL(path)
 
 try:
     if MPI._sizeof(MPI.Comm) == ct.sizeof(ct.c_int):
@@ -93,7 +91,7 @@ def MLmap(
     inv_tt,
     tt,
 ):
-    if not available:
+    if _mappraiser is None:
         raise RuntimeError('No libmappraiser available, cannot reconstruct the map')
 
     outpath = params['output_dir'].encode('ascii')

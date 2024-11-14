@@ -2,7 +2,7 @@
 This package contains the wrapper around the Mappraiser C library.
 """
 
-from .map import MLmap, available
+from .map import MLmap
 from .types import (
     INDEX_TYPE,
     INVTT_TYPE,
@@ -21,7 +21,6 @@ __all__ = [
     'PrecondType',
     'SolverType',
     'MLmap',
-    'available',
     'SIGNAL_TYPE',
     'INDEX_TYPE',
     'WEIGHT_TYPE',

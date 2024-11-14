@@ -14,8 +14,6 @@ from toast.tests._helpers import (
 from toast.tests.mpi import MPITestCase
 from toast.vis import set_matplotlib_backend
 
-from . import operator as mappraiser
-
 
 def create_outdir(
     mpicomm: Comm | Intracomm | None, subdir: str | os.PathLike | None = None
@@ -49,8 +47,10 @@ class MappraiserTest(MPITestCase):
         np.random.seed(123456)
 
     def test_mappraiser_interface(self):
-        if not mappraiser.available():
-            print('libmappraiser not available, skipping tests')
+        try:
+            from .operator import MapMaker
+        except ImportError:
+            print('Mappraiser not available, skipping tests')
             return
 
         # Create a fake satellite data set for testing
@@ -192,7 +192,7 @@ class MappraiserTest(MPITestCase):
 
         # Run mappraiser on this
 
-        mapmaker = mappraiser.MapMaker(
+        mapmaker = MapMaker(
             output_dir=self.outdir,
             lagmax=16,
             maxiter=50,

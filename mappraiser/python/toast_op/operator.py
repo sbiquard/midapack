@@ -20,14 +20,11 @@ from .buffer import MappraiserBuffers
 from .interface import ToastContainer
 from .utils import effective_ntt, estimate_psd, log_time_memory, next_fast_fft_size, psd_to_invntt
 
-__all__ = ['MapMaker', 'available']
+__all__ = [
+    'MapMaker',
+]
 
 ObservationKeysDict: TypeAlias = dict[str, list[str]]
-
-
-def available():
-    """Return True if libmappraiser is found in the library search path"""
-    return lib.available
 
 
 @trait_docs
@@ -144,9 +141,6 @@ class MapMaker(ToastOperator):
     @function_timer
     def _exec(self, data: ToastData, detectors: list[str] | None = None, **kwargs) -> None:
         """Run mappraiser on the supplied data object"""
-        if not available():
-            raise RuntimeError('Mappraiser is either not installed or MPI is disabled')
-
         self._timer.start()
 
         # Setting up and staging the data
