@@ -6,7 +6,6 @@ import numpy as np
 import numpy.typing as npt
 import tomlkit
 import traitlets
-
 from toast.data import Data as ToastData
 from toast.observation import default_values as defaults
 from toast.ops.operator import Operator as ToastOperator

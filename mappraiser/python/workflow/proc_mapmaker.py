@@ -16,14 +16,14 @@ def setup_mapmaker_mappraiser(parser, operators):
 
     """
     parser.add_argument(
-        "--ref",
+        '--ref',
         required=False,
-        default="run0",
-        help="Reference that is added to the name of the output maps.",
+        default='run0',
+        help='Reference that is added to the name of the output maps.',
     )
 
     if mappraiser.available():
-        operators.append(mappraiser.Mappraiser(name="mappraiser", enabled=False))
+        operators.append(mappraiser.Mappraiser(name='mappraiser', enabled=False))
 
 
 @workflow_timer
@@ -44,8 +44,8 @@ def mapmaker_mappraiser(job, otherargs, runargs, data):
     job_ops = job.operators
 
     if mappraiser.available() and job_ops.mappraiser.enabled:
-        job_ops.mappraiser.params["path_output"] = otherargs.out_dir
-        job_ops.mappraiser.params["ref"] = otherargs.ref
+        job_ops.mappraiser.params['path_output'] = otherargs.out_dir
+        job_ops.mappraiser.params['ref'] = otherargs.ref
         job_ops.mappraiser.pixel_pointing = job.pixels_final
         job_ops.mappraiser.stokes_weights = job.weights_final
         job_ops.mappraiser.az_name = job_ops.sim_ground.azimuth

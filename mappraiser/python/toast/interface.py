@@ -4,9 +4,8 @@ from typing import Any, Literal
 
 import numpy as np
 import numpy.typing as npt
-from astropy import units as u
-
 import toast
+from astropy import units as u
 from toast.observation import default_values as defaults
 from toast.ops import Operator, PixelsHealpix, StokesWeights
 from toast.utils import name_UID

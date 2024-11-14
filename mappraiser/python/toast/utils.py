@@ -2,7 +2,6 @@ import numpy as np
 import numpy.typing as npt
 from scipy.optimize import curve_fit
 from scipy.signal import get_window, welch
-
 from toast.data import Data as ToastData
 from toast.ops.memory_counter import MemoryCounter
 from toast.timing import Timer as ToastTimer
