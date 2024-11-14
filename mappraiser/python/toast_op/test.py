@@ -4,6 +4,7 @@ from pathlib import Path
 import numpy as np
 import toast.ops as ops
 from mpi4py.MPI import Comm, Intracomm
+from toast.mpi import MPI, use_mpi
 from toast.observation import default_values as defaults
 from toast.tests._helpers import (
     close_data,
@@ -11,7 +12,6 @@ from toast.tests._helpers import (
     create_satellite_data,
     fake_flags,
 )
-from toast.tests.mpi import MPITestCase
 from toast.vis import set_matplotlib_backend
 
 
@@ -40,12 +40,15 @@ def create_outdir(
     return retdir
 
 
-class InterfaceTest(MPITestCase):
-    def setUp(self):
+class InterfaceTest:
+    def __init__(self):
+        self.comm = None
+        if use_mpi:
+            self.comm = MPI.COMM_WORLD
         self.outdir = create_outdir(self.comm)
         # np.random.seed(123456)
 
-    def runTest(self):
+    def run(self):
         try:
             from .operator import MapMaker
         except ImportError:
