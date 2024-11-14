@@ -42,9 +42,8 @@ def create_outdir(
 
 class InterfaceTest(MPITestCase):
     def setUp(self):
-        fixture_name = os.path.splitext(os.path.basename(__file__))[0]
-        self.outdir = create_outdir(self.comm, fixture_name)
-        np.random.seed(123456)
+        self.outdir = create_outdir(self.comm)
+        # np.random.seed(123456)
 
     def runTest(self):
         try:
