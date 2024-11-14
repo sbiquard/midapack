@@ -1,7 +1,8 @@
 """Mapmaking with the MAPPRAISER framework."""
 
-from pymappraiser.toast import mappraiser
 from sotodlib.toast.workflows.job import workflow_timer
+
+from mappraiser.toast_op import operator as mappraiser_op
 
 
 def setup_mapmaker_mappraiser(parser, operators):
@@ -22,8 +23,8 @@ def setup_mapmaker_mappraiser(parser, operators):
         help='Reference that is added to the name of the output maps.',
     )
 
-    if mappraiser.available():
-        operators.append(mappraiser.Mappraiser(name='mappraiser', enabled=False))
+    if mappraiser_op.available():
+        operators.append(mappraiser_op.Mappraiser(name='mappraiser', enabled=False))
 
 
 @workflow_timer
@@ -43,7 +44,7 @@ def mapmaker_mappraiser(job, otherargs, runargs, data):
     # Configured operators for this job
     job_ops = job.operators
 
-    if mappraiser.available() and job_ops.mappraiser.enabled:
+    if mappraiser_op.available() and job_ops.mappraiser.enabled:
         job_ops.mappraiser.params['path_output'] = otherargs.out_dir
         job_ops.mappraiser.params['ref'] = otherargs.ref
         job_ops.mappraiser.pixel_pointing = job.pixels_final

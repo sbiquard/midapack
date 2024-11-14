@@ -21,6 +21,6 @@ install(FILES
     DESTINATION ${PYTHON_SITE}
 )
 
-add_subdirectory(toast)
+add_subdirectory(toast_op)
 add_subdirectory(workflow)
 add_subdirectory(wrapper)

@@ -5,5 +5,5 @@ install(FILES
     operator.py
     test.py
     utils.py
-    DESTINATION ${PYTHON_SITE}/toast
+    DESTINATION ${PYTHON_SITE}/toast-op
 )

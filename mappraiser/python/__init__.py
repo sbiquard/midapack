@@ -2,10 +2,10 @@
 Python interface for the Mappraiser library.
 """
 
-from . import toast, workflow, wrapper
+from . import toast_op, workflow, wrapper
 
 __all__ = [
-    'toast',
+    'toast_op',
     'workflow',
     'wrapper',
 ]
