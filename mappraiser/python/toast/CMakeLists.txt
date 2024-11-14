@@ -1,7 +1,9 @@
 install(FILES
     __init__.py
-    mappraiser.py
-    mappraiser_test.py
+    buffer.py
+    interface.py
+    operator.py
+    test.py
     utils.py
     DESTINATION ${PYTHON_SITE}/toast
 )

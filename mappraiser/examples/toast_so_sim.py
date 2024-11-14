@@ -48,7 +48,7 @@ from toast.utils import Environment, Logger, memreport
 
 pixell.fft.engine = 'fftw'
 
-from pymappraiser.workflow import mapmaker_mappraiser, setup_mapmaker_mappraiser
+from mappraiser.workflow import mapmaker_mappraiser, setup_mapmaker_mappraiser
 
 
 def simulate_data(job, otherargs, runargs, comm):

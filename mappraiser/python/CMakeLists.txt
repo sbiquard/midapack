@@ -13,7 +13,13 @@ execute_process(
 # to use on many systems.
 #set(PYTHON_SITE
 #    "${CMAKE_INSTALL_LIBDIR}/python${PYTHON_MAJORMINOR}/site-packages")
-set(PYTHON_SITE "lib/python${PYTHON_MAJORMINOR}/site-packages/pymappraiser")
+set(PYTHON_SITE "lib/python${PYTHON_MAJORMINOR}/site-packages/mappraiser")
+
+# Install the top-level __init__.py file
+install(FILES
+    __init__.py
+    DESTINATION ${PYTHON_SITE}
+)
 
 add_subdirectory(toast)
 add_subdirectory(workflow)
