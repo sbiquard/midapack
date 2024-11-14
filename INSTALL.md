@@ -76,22 +76,14 @@ If TOAST is installed on your system, you may test your mappraiser installation 
 
 ```python
 import toast.mpi
-from pymappraiser.mappraiser_test import MappraiserTest
+from mappraiser.toast_op.test import InterfaceTest
 
 def main():
-    mt = MappraiserTest()
-    mt.setUp()
-    mt.test_mappraiser_interface()
+    test = InterfaceTest()
+    test.run()
 
 if __name__ == "__main__":
     world, procs, rank = toast.mpi.get_world()
     with toast.mpi.exception_guard(comm=world):
         main()
 ```
-
-## examples (deprecated)
-
-To build the examples binaries for the core library, do:
-
-- make mapmat_example to generate the examples from the mapmat module
-- make toeplitz_example to generate the examples from the Toeplitz module
