@@ -71,6 +71,20 @@ class ObservationData:
         return self.focalplane.sample_rate.to_value(u.Hz)  # pyright: ignore[reportOptionalMemberAccess,reportAttributeAccessIssue]
 
     @property
+    def telescope_uids(self) -> npt.NDArray[lib.META_ID_TYPE]:
+        # NB: we duplicate the information on purpose
+        return np.array(
+            [self.observation.telescope.uid for _ in self.sdets], dtype=lib.META_ID_TYPE
+        )
+
+    @property
+    def session_uids(self) -> npt.NDArray[lib.META_ID_TYPE]:
+        # NB: we duplicate the information on purpose
+        if (session := self.observation.session) is None:
+            raise ValueError('Observation does not have a session attribute')
+        return np.array([session.uid for _ in self.sdets], dtype=lib.META_ID_TYPE)
+
+    @property
     def detector_uids(self) -> npt.NDArray[lib.META_ID_TYPE]:
         return np.array([name_UID(det, int64=True) for det in self.sdets], dtype=lib.META_ID_TYPE)
 
@@ -120,7 +134,9 @@ class ObservationData:
         return indices
 
     def get_weights(self, op: StokesWeights) -> npt.NDArray[lib.WEIGHT_TYPE]:
-        weights = np.array(self.observation.detdata[op.weights][self.sdets, :], dtype=lib.WEIGHT_TYPE)
+        weights = np.array(
+            self.observation.detdata[op.weights][self.sdets, :], dtype=lib.WEIGHT_TYPE
+        )
         if self.purge:
             del self.observation.detdata[op.weights]
         return self.transform_pairs(weights)
@@ -217,11 +233,11 @@ class ToastContainer:
 
     @property
     def telescope_uids(self) -> npt.NDArray[lib.META_ID_TYPE]:
-        return np.array([ob.telescope.uid for ob in self.data.obs], dtype=lib.META_ID_TYPE)
+        return np.concatenate([ob.telescope_uids for ob in self._obs], axis=None)
 
     @property
     def session_uids(self) -> npt.NDArray[lib.META_ID_TYPE]:
-        return np.array([ob.session.uid for ob in self.data.obs], dtype=lib.META_ID_TYPE)
+        return np.concatenate([ob.session_uids for ob in self._obs], axis=None)
 
     @property
     def detector_uids(self) -> npt.NDArray[lib.META_ID_TYPE]:

@@ -137,6 +137,11 @@ class MapMaker(ToastOperator):
         """Run mappraiser on the supplied data object"""
         self._timer.start()
 
+        # Get the global communicator
+        self._comm = data.comm.comm_world
+        if self._comm is None:
+            raise RuntimeError('Mappraiser requires MPI, but the global communicator is None')
+
         # Setting up and staging the data
         self._log_memory(data, 'Before staging the data')
         self._prepare(data)
@@ -154,9 +159,6 @@ class MapMaker(ToastOperator):
         # Check that we have at least one observation
         if len(data.obs) == 0:
             raise RuntimeError('Every supplied data object must contain at least one observation')
-
-        # Get the global communicator
-        self._comm = data.comm.comm_world
 
         # Check if the noise data is available and set dependent traits
         if self.noise_data is None:
@@ -230,10 +232,9 @@ class MapMaker(ToastOperator):
         )
 
         # Get data distribution information
-        n_blocks = ctnr.n_local_blocks
-        block_sizes = ctnr.local_block_sizes
-        assert n_blocks == len(block_sizes)
-        data_size = ctnr.local_data_size
+        n_blocks = ctnr.n_local_blocks  # roughly n_obs * n_det
+        block_sizes = ctnr.local_block_sizes  # sizes of the blocks
+        data_size = ctnr.local_data_size  # total size (sum of block sizes)
         data_size_proc = np.array(ctnr.allgather(data_size), dtype=lib.INDEX_TYPE)
 
         # Metadata
@@ -251,6 +252,19 @@ class MapMaker(ToastOperator):
 
         # Inverse noise covariance
         invntt, ntt = self._get_invntt(ctnr, noise, block_sizes)
+
+        # Check that sizes are consistent
+        assert n_blocks == block_sizes.size
+        assert n_blocks == telescopes.size
+        assert n_blocks == obsindxs.size
+        assert n_blocks == detindxs.size
+        assert n_blocks == invntt.size // self.lagmax
+        assert n_blocks == ntt.size // self.lagmax
+        assert data_size == block_sizes.sum()
+        assert data_size == signal.size
+        assert data_size == noise.size
+        assert data_size == pixels.size // self._nnz
+        assert data_size == weights.size // self._nnz
 
         self._buffers = MappraiserBuffers(
             local_blocksizes=block_sizes,
