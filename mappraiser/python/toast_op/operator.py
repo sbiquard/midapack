@@ -204,10 +204,10 @@ class MapMaker(ToastOperator):
         )
 
         # Log the parameters that were used, creating the output directory if necessary
-        self.output_dir = Path(self.output_dir)
+        outdir = Path(self.output_dir)
         if data.comm.world_rank == 0:
-            self.output_dir.mkdir(parents=True, exist_ok=True)
-            with open(self.output_dir / 'mappraiser_args_log.toml', 'w') as file:
+            outdir.mkdir(parents=True, exist_ok=True)
+            with open(outdir / 'mappraiser_args_log.toml', 'w') as file:
                 tomlkit.dump(self.params, file, sort_keys=True)
 
     @function_timer
