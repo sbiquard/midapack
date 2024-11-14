@@ -117,12 +117,6 @@ class MapMaker(ToastOperator):
         self._logger = Logger.get()
         self._timer = Timer()
 
-    def clear(self) -> None:
-        del self._buffers
-
-    def __del__(self) -> None:
-        self.clear()
-
     def _log_info(self, msg: str) -> None:
         self._logger.info_rank(
             f'{self._logprefix} {msg} in',
@@ -330,9 +324,6 @@ class MapMaker(ToastOperator):
             self._buffers.invntt,
             self._buffers.ntt,
         )
-
-    def _finalize(self, data: ToastData, **kwargs) -> None:
-        self.clear()
 
     def _requires(self) -> ObservationKeysDict:
         req = {
