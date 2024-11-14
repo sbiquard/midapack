@@ -8,7 +8,7 @@ from toast.ops.memory_counter import MemoryCounter
 from toast.timing import Timer as ToastTimer
 from toast.utils import Logger, memreport
 
-from ..wrapper.types import INDEX_TYPE, INVTT_TYPE, SIGNAL_TYPE
+from .. import wrapper as lib
 
 
 def log_time_memory(
@@ -71,8 +71,8 @@ def interpolate_psd(
 
 
 def estimate_psd(
-    noise: npt.NDArray[SIGNAL_TYPE],
-    block_sizes: npt.NDArray[INDEX_TYPE],
+    noise: npt.NDArray[lib.SIGNAL_TYPE],
+    block_sizes: npt.NDArray[lib.INDEX_TYPE],
     fft_size: int,
     rate: float = 1.0,
 ) -> tuple[npt.NDArray, npt.NDArray]:
@@ -135,19 +135,19 @@ def _model(x, sigma, alpha, fk, f0):
     return psd
 
 
-def psd_to_invntt(psd: npt.NDArray, correlation_length: int) -> npt.NDArray[INVTT_TYPE]:
+def psd_to_invntt(psd: npt.NDArray, correlation_length: int) -> npt.NDArray[lib.INVTT_TYPE]:
     """Compute the inverse autocorrelation function from PSD values.
     The result is apodized and cut at the specified correlation length.
     """
-    invntt = np.asarray(np.fft.irfft(1 / psd), dtype=INVTT_TYPE)[..., :correlation_length]
+    invntt = np.asarray(np.fft.irfft(1 / psd), dtype=lib.INVTT_TYPE)[..., :correlation_length]
     return apodize(invntt)
 
 
-def psd_to_ntt(psd: npt.NDArray, correlation_length: int) -> npt.NDArray[INVTT_TYPE]:
+def psd_to_ntt(psd: npt.NDArray, correlation_length: int) -> npt.NDArray[lib.INVTT_TYPE]:
     """Compute the autocorrelation function from PSD values.
     The result is apodized and cut at the specified correlation length.
     """
-    ntt = np.asarray(np.fft.irfft(psd), dtype=INVTT_TYPE)[..., :correlation_length]
+    ntt = np.asarray(np.fft.irfft(psd), dtype=lib.INVTT_TYPE)[..., :correlation_length]
     return apodize(ntt)
 
 
@@ -171,7 +171,7 @@ def apodization_window(size: int, kind: str = 'chebwin') -> npt.NDArray:
     return window
 
 
-def folded_psd(inv_n_tt: npt.NDArray[INVTT_TYPE], fft_size: int) -> npt.NDArray:
+def folded_psd(inv_n_tt: npt.NDArray[lib.INVTT_TYPE], fft_size: int) -> npt.NDArray:
     """Returns the folded Power Spectral Density of a one-dimensional vector.
 
     Args:
@@ -185,7 +185,7 @@ def folded_psd(inv_n_tt: npt.NDArray[INVTT_TYPE], fft_size: int) -> npt.NDArray:
     return psd
 
 
-def _get_kernel(n_tt: npt.NDArray[INVTT_TYPE], size: int) -> npt.NDArray[INVTT_TYPE]:
+def _get_kernel(n_tt: npt.NDArray[lib.INVTT_TYPE], size: int) -> npt.NDArray[lib.INVTT_TYPE]:
     lagmax = n_tt.size - 1
     padding_size = size - (2 * lagmax + 1)
     if padding_size < 0:
@@ -195,7 +195,9 @@ def _get_kernel(n_tt: npt.NDArray[INVTT_TYPE], size: int) -> npt.NDArray[INVTT_T
     return kernel
 
 
-def effective_ntt(invntt: npt.NDArray[INVTT_TYPE], fft_size: int) -> npt.NDArray[INVTT_TYPE]:
+def effective_ntt(
+    invntt: npt.NDArray[lib.INVTT_TYPE], fft_size: int
+) -> npt.NDArray[lib.INVTT_TYPE]:
     lagmax = invntt.shape[-1]
     effective_psd = folded_psd(invntt, fft_size)
     return psd_to_ntt(effective_psd, lagmax)

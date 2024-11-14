@@ -7,7 +7,6 @@ import numpy.typing as npt
 import tomlkit
 import traitlets
 
-from mappraiser.python.wrapper.types import INDEX_TYPE, SIGNAL_TYPE
 from toast.data import Data as ToastData
 from toast.observation import default_values as defaults
 from toast.ops.operator import Operator as ToastOperator
@@ -286,8 +285,8 @@ class MapMaker(ToastOperator):
     def _get_invntt(
         self,
         ctnr: ToastContainer,
-        noise: npt.NDArray[SIGNAL_TYPE],
-        block_sizes: npt.NDArray[INDEX_TYPE],
+        noise: npt.NDArray[lib.SIGNAL_TYPE],
+        block_sizes: npt.NDArray[lib.INDEX_TYPE],
     ) -> tuple[npt.NDArray[lib.INVTT_TYPE], npt.NDArray[lib.INVTT_TYPE]]:
         if self.lagmax > any(block_sizes):
             msg = 'Maximum lag should be less than the number of samples of any data block'

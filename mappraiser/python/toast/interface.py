@@ -11,10 +11,10 @@ from toast.observation import default_values as defaults
 from toast.ops import Operator, PixelsHealpix, StokesWeights
 from toast.utils import name_UID
 
-from ..wrapper.types import INDEX_TYPE, INVTT_TYPE, META_ID_TYPE, SIGNAL_TYPE, WEIGHT_TYPE
+from .. import wrapper as lib
 from .utils import interpolate_psd
 
-MappraiserDtype = SIGNAL_TYPE | WEIGHT_TYPE | INVTT_TYPE | INDEX_TYPE
+MappraiserDtype = lib.SIGNAL_TYPE | lib.WEIGHT_TYPE | lib.INVTT_TYPE | lib.INDEX_TYPE
 ValidPairDiffTransform = Literal['half-sub', 'add']
 
 
@@ -46,9 +46,9 @@ class ObservationData:
         return self.observation.n_local_samples
 
     @property
-    def local_block_sizes(self) -> npt.NDArray[INDEX_TYPE]:
+    def local_block_sizes(self) -> npt.NDArray[lib.INDEX_TYPE]:
         # FIXME: When we take flags into account, we need to update this
-        return np.array([self.samples for _ in self.sdets], dtype=INDEX_TYPE)
+        return np.array([self.samples for _ in self.sdets], dtype=lib.INDEX_TYPE)
 
     @ft.cached_property
     def sdets(self) -> list[str]:
@@ -72,8 +72,8 @@ class ObservationData:
         return self.focalplane.sample_rate.to_value(u.Hz)  # pyright: ignore[reportOptionalMemberAccess,reportAttributeAccessIssue]
 
     @property
-    def detector_uids(self) -> npt.NDArray[META_ID_TYPE]:
-        return np.array([name_UID(det, int64=True) for det in self.sdets], dtype=META_ID_TYPE)
+    def detector_uids(self) -> npt.NDArray[lib.META_ID_TYPE]:
+        return np.array([name_UID(det, int64=True) for det in self.sdets], dtype=lib.META_ID_TYPE)
 
     def transform_pairs[T: MappraiserDtype](
         self, a: npt.NDArray[T], operation: ValidPairDiffTransform = 'half-sub'
@@ -90,26 +90,28 @@ class ObservationData:
             raise ValueError(f'Invalid operation {operation!r}')
         return transformed.astype(a.dtype)
 
-    def get_signal(self) -> npt.NDArray[SIGNAL_TYPE]:
-        signal = np.array(self.observation.detdata[self.det_data][self.sdets, :], dtype=SIGNAL_TYPE)
+    def get_signal(self) -> npt.NDArray[lib.SIGNAL_TYPE]:
+        signal = np.array(
+            self.observation.detdata[self.det_data][self.sdets, :], dtype=lib.SIGNAL_TYPE
+        )
         if self.purge:
             del self.observation.detdata[self.det_data]
         return self.transform_pairs(signal)
 
-    def get_noise(self) -> npt.NDArray[SIGNAL_TYPE]:
+    def get_noise(self) -> npt.NDArray[lib.SIGNAL_TYPE]:
         if self.noise_data is None:
             raise RuntimeError('Can not access noise without a field name')
         noise = np.array(
-            self.observation.detdata[self.noise_data][self.sdets, :], dtype=SIGNAL_TYPE
+            self.observation.detdata[self.noise_data][self.sdets, :], dtype=lib.SIGNAL_TYPE
         )
         if self.purge:
             del self.observation.detdata[self.noise_data]
         return self.transform_pairs(noise)
 
-    def get_indices(self, op: PixelsHealpix) -> npt.NDArray[INDEX_TYPE]:
+    def get_indices(self, op: PixelsHealpix) -> npt.NDArray[lib.INDEX_TYPE]:
         # When doing pair differencing, we get the indices from the even detectors
         dets = self.even_dets if self.pair_diff else self.sdets
-        indices = np.array(self.observation[op.pixels][dets, :], dtype=INDEX_TYPE)
+        indices = np.array(self.observation[op.pixels][dets, :], dtype=lib.INDEX_TYPE)
         if self.purge:
             del self.observation[op.pixels]
         # Arrange the pixel indices for Mappraiser
@@ -118,8 +120,8 @@ class ObservationData:
             indices[i::nnz] += i
         return indices
 
-    def get_weights(self, op: StokesWeights) -> npt.NDArray[WEIGHT_TYPE]:
-        weights = np.array(self.observation[op.weights][self.sdets, :], dtype=WEIGHT_TYPE)
+    def get_weights(self, op: StokesWeights) -> npt.NDArray[lib.WEIGHT_TYPE]:
+        weights = np.array(self.observation[op.weights][self.sdets, :], dtype=lib.WEIGHT_TYPE)
         if self.purge:
             del self.observation[op.weights]
         return self.transform_pairs(weights)
@@ -166,16 +168,16 @@ class ToastContainer:
     det_flags: str = defaults.det_flags
     shared_flags: str = defaults.shared_flags
 
-    def get_signal(self) -> npt.NDArray[SIGNAL_TYPE]:
+    def get_signal(self) -> npt.NDArray[lib.SIGNAL_TYPE]:
         return np.concatenate([ob.get_signal() for ob in self._obs], axis=None)
 
-    def get_noise(self) -> npt.NDArray[SIGNAL_TYPE]:
+    def get_noise(self) -> npt.NDArray[lib.SIGNAL_TYPE]:
         return np.concatenate([ob.get_noise() for ob in self._obs], axis=None)
 
-    def get_pointing_indices(self, op: PixelsHealpix) -> npt.NDArray[INDEX_TYPE]:
+    def get_pointing_indices(self, op: PixelsHealpix) -> npt.NDArray[lib.INDEX_TYPE]:
         return np.concatenate([ob.get_indices(op) for ob in self._synthesized_obs(op)], axis=None)
 
-    def get_pointing_weights(self, op: StokesWeights) -> npt.NDArray[WEIGHT_TYPE]:
+    def get_pointing_weights(self, op: StokesWeights) -> npt.NDArray[lib.WEIGHT_TYPE]:
         return np.concatenate([ob.get_weights(op) for ob in self._synthesized_obs(op)], axis=None)
 
     def get_interp_psds(self, fft_size: int, rate: float = 1.0) -> npt.NDArray:
@@ -210,20 +212,20 @@ class ToastContainer:
         return s
 
     @property
-    def local_block_sizes(self) -> npt.NDArray[INDEX_TYPE]:
+    def local_block_sizes(self) -> npt.NDArray[lib.INDEX_TYPE]:
         """Compute the local block sizes for each observation"""
         return np.concatenate([ob.local_block_sizes for ob in self._obs], axis=None)
 
     @property
-    def telescope_uids(self) -> npt.NDArray[META_ID_TYPE]:
-        return np.array([ob.telescope.uid for ob in self.data.obs], dtype=META_ID_TYPE)
+    def telescope_uids(self) -> npt.NDArray[lib.META_ID_TYPE]:
+        return np.array([ob.telescope.uid for ob in self.data.obs], dtype=lib.META_ID_TYPE)
 
     @property
-    def session_uids(self) -> npt.NDArray[META_ID_TYPE]:
-        return np.array([ob.session.uid for ob in self.data.obs], dtype=META_ID_TYPE)
+    def session_uids(self) -> npt.NDArray[lib.META_ID_TYPE]:
+        return np.array([ob.session.uid for ob in self.data.obs], dtype=lib.META_ID_TYPE)
 
     @property
-    def detector_uids(self) -> npt.NDArray[META_ID_TYPE]:
+    def detector_uids(self) -> npt.NDArray[lib.META_ID_TYPE]:
         return np.concatenate([ob.detector_uids for ob in self._obs], axis=None)
 
     @ft.cached_property
