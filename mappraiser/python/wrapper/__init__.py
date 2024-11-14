@@ -1,3 +1,7 @@
+"""
+This package contains the wrapper around the Mappraiser C library.
+"""
+
 from .map import MLmap, available
 from .types import (
     INDEX_TYPE,
