@@ -75,9 +75,9 @@ class ObservationData:
     def detector_uids(self) -> npt.NDArray[lib.META_ID_TYPE]:
         return np.array([name_UID(det, int64=True) for det in self.sdets], dtype=lib.META_ID_TYPE)
 
-    def transform_pairs[T: MappraiserDtype](
-        self, a: npt.NDArray[T], operation: ValidPairDiffTransform = 'half-sub'
-    ) -> npt.NDArray[T]:
+    def transform_pairs(
+        self, a: npt.NDArray, operation: ValidPairDiffTransform = 'half-sub'
+    ) -> npt.NDArray:
         if not self.pair_diff:
             return a
         # check that there is an even number of detectors

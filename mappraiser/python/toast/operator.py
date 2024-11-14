@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import final, override
+from typing import TypeAlias
 
 import astropy.units as u
 import numpy as np
@@ -23,7 +23,7 @@ from .utils import effective_ntt, estimate_psd, log_time_memory, next_fast_fft_s
 
 __all__ = ['MapMaker', 'available']
 
-type ObservationKeysDict = dict[str, list[str]]
+ObservationKeysDict: TypeAlias = dict[str, list[str]]
 
 
 def available():
@@ -31,7 +31,6 @@ def available():
     return lib.available
 
 
-@final
 @trait_docs
 class MapMaker(ToastOperator):
     """Operator that passes data to libmappraiser for map-making"""
@@ -144,7 +143,6 @@ class MapMaker(ToastOperator):
         )
 
     @function_timer
-    @override
     def _exec(self, data: ToastData, detectors: list[str] | None = None, **kwargs) -> None:
         """Run mappraiser on the supplied data object"""
         if not available():
@@ -340,11 +338,9 @@ class MapMaker(ToastOperator):
             self._buffers.ntt,
         )
 
-    @override
     def _finalize(self, data: ToastData, **kwargs) -> None:
         self.clear()
 
-    @override
     def _requires(self) -> ObservationKeysDict:
         req = {
             'meta': [self.noise_model],
@@ -360,7 +356,6 @@ class MapMaker(ToastOperator):
             req['detdata'].append(self.det_flags)
         return req
 
-    @override
     def _provides(self) -> ObservationKeysDict:
         # We do not provide any data back to the pipeline
         return {}
