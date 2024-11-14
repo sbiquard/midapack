@@ -110,9 +110,9 @@ class ObservationData:
     def get_indices(self, op: PixelsHealpix) -> npt.NDArray[lib.INDEX_TYPE]:
         # When doing pair differencing, we get the indices from the even detectors
         dets = self.even_dets if self.pair_diff else self.sdets
-        indices = np.array(self.observation[op.pixels][dets, :], dtype=lib.INDEX_TYPE)
+        indices = np.array(self.observation.detdata[op.pixels][dets, :], dtype=lib.INDEX_TYPE)
         if self.purge:
-            del self.observation[op.pixels]
+            del self.observation.detdata[op.pixels]
         # Arrange the pixel indices for Mappraiser
         indices = np.repeat(indices, nnz := self.nnz) * nnz
         for i in range(nnz):
@@ -120,9 +120,9 @@ class ObservationData:
         return indices
 
     def get_weights(self, op: StokesWeights) -> npt.NDArray[lib.WEIGHT_TYPE]:
-        weights = np.array(self.observation[op.weights][self.sdets, :], dtype=lib.WEIGHT_TYPE)
+        weights = np.array(self.observation.detdata[op.weights][self.sdets, :], dtype=lib.WEIGHT_TYPE)
         if self.purge:
-            del self.observation[op.weights]
+            del self.observation.detdata[op.weights]
         return self.transform_pairs(weights)
 
     def get_interp_psds(self, fft_size: int, rate: float = 1.0):
