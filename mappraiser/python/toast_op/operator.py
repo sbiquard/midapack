@@ -273,7 +273,7 @@ class MapMaker(ToastOperator):
         noise: npt.NDArray[lib.SIGNAL_TYPE],
         block_sizes: npt.NDArray[lib.INDEX_TYPE],
     ) -> tuple[npt.NDArray[lib.INVTT_TYPE], npt.NDArray[lib.INVTT_TYPE]]:
-        if self.lagmax > any(block_sizes):
+        if any(self.lagmax > block_sizes):
             msg = 'Maximum lag should be less than the number of samples of any data block'
             raise RuntimeError(msg)
         invntt = np.empty((len(block_sizes), self.lagmax), lib.INVTT_TYPE)
