@@ -40,13 +40,13 @@ def create_outdir(
     return retdir
 
 
-class MappraiserTest(MPITestCase):
+class InterfaceTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, fixture_name)
         np.random.seed(123456)
 
-    def test_mappraiser_interface(self):
+    def runTest(self):
         try:
             from .operator import MapMaker
         except ImportError:
@@ -63,13 +63,13 @@ class MappraiserTest(MPITestCase):
             detector_pointing=detpointing,
             create_dist='pixel_dist',
         )
-        # pixels.apply(data)
+        pixels.apply(data)
         weights = ops.StokesWeights(
             mode='IQU',
             hwp_angle=defaults.hwp_angle,
             detector_pointing=detpointing,
         )
-        # weights.apply(data)
+        weights.apply(data)
 
         # Create fake polarized sky pixel values locally
         create_fake_sky(data, 'pixel_dist', 'fake_map')
@@ -105,7 +105,7 @@ class MappraiserTest(MPITestCase):
             # ax.set_ylim([0.001 * (nse.NET(det) ** 2), 10.0 * cur_ylim[1]])
             ax.legend(loc=1)
             plt.title('Sky Signal')
-            savefile = os.path.join(self.outdir, f'signal_sky_{ob.name}_{det}.pdf')
+            savefile = self.outdir / f'signal_sky_{ob.name}_{det}.pdf'
             plt.savefig(savefile)
             plt.close()
 
@@ -147,7 +147,7 @@ class MappraiserTest(MPITestCase):
             # ax.set_ylim([0.001 * (nse.NET(det) ** 2), 10.0 * cur_ylim[1]])
             ax.legend(loc=1)
             plt.title('Sky + Noise Signal')
-            savefile = os.path.join(self.outdir, f'signal_sky-noise_{ob.name}_{det}.pdf')
+            savefile = self.outdir / f'signal_sky-noise_{ob.name}_{det}.pdf'
             plt.savefig(savefile)
             plt.close()
 
@@ -186,14 +186,14 @@ class MappraiserTest(MPITestCase):
             # ax.set_ylim([0.001 * (nse.NET(det) ** 2), 10.0 * cur_ylim[1]])
             ax.legend(loc=1)
             plt.title('Sky + Noise + Offset Signal')
-            savefile = os.path.join(self.outdir, f'signal_sky-noise-offset_{ob.name}_{det}.pdf')
+            savefile = self.outdir / f'signal_sky-noise-offset_{ob.name}_{det}.pdf'
             plt.savefig(savefile)
             plt.close()
 
         # Run mappraiser on this
 
         mapmaker = MapMaker(
-            output_dir=self.outdir,
+            output_dir=str(self.outdir),
             lagmax=16,
             maxiter=50,
             det_data=defaults.det_data,
