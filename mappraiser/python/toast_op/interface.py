@@ -64,7 +64,12 @@ class ObservationData:
 
     @property
     def fdets_prefix(self) -> list[str]:
-        """Return a list of detector name prefixes (common part between even and odd ones)"""
+        """Return a list of detector name prefixes (common part between even and odd ones).
+
+        This method only makes sense if we are doing pair differencing.
+        """
+        if not self.pair_diff:
+            raise ValueError('This method should only be called when doing pair differencing')
         return [commonprefix([a, b]) for a, b in pairwise(self.sdets)]
 
     @property
@@ -90,9 +95,8 @@ class ObservationData:
 
     @property
     def detector_uids(self) -> npt.NDArray[lib.META_ID_TYPE]:
-        return np.array(
-            [name_UID(det, int64=True) for det in self.fdets_prefix], dtype=lib.META_ID_TYPE
-        )
+        dets = self.sdets if not self.pair_diff else self.fdets_prefix
+        return np.array([name_UID(det, int64=True) for det in dets], dtype=lib.META_ID_TYPE)
 
     def transform_pairs(
         self, a: npt.NDArray, operation: ValidPairDiffTransform = 'half-sub'
