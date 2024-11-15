@@ -41,11 +41,12 @@ def create_outdir(
 
 
 class InterfaceTest:
-    def __init__(self):
+    def __init__(self, pair_diff: bool = False):
         self.comm = None
         if use_mpi:
             self.comm = MPI.COMM_WORLD
         self.outdir = create_outdir(self.comm)
+        self.pair_diff = pair_diff
         # np.random.seed(123456)
 
     def run(self):
@@ -190,15 +191,16 @@ class InterfaceTest:
         # Run mappraiser on this
 
         mapmaker = MapMaker(
-            output_dir=str(self.outdir),
-            lagmax=16,
-            maxiter=50,
-            det_data=defaults.det_data,
             pixel_pointing=pixels,
             stokes_weights=weights,
-            noise_name='noise',
-            purge_det_data=False,
+            det_data=defaults.det_data,
+            noise_data='noise',
+            lagmax=16,
             mem_report=True,
+            output_dir=str(self.outdir),
+            pair_diff=self.pair_diff,
+            purge_det_data=False,
+            maxiter=50,
         )
         mapmaker.apply(data)
 

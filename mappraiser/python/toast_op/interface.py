@@ -1,5 +1,6 @@
 import functools as ft
 from dataclasses import dataclass
+from os.path import commonprefix
 from typing import Any, Literal
 
 import numpy as np
@@ -11,7 +12,7 @@ from toast.ops import Operator, PixelsHealpix, StokesWeights
 from toast.utils import name_UID
 
 from .. import wrapper as lib
-from .utils import interpolate_psd
+from .utils import interpolate_psd, pairwise
 
 MappraiserDtype = lib.SIGNAL_TYPE | lib.WEIGHT_TYPE | lib.INVTT_TYPE | lib.INDEX_TYPE
 ValidPairDiffTransform = Literal['half-sub', 'add']
@@ -19,7 +20,8 @@ ValidPairDiffTransform = Literal['half-sub', 'add']
 
 @dataclass
 class ObservationData:
-    observation: toast.Observation
+    ob: toast.Observation
+    nnz: int
     pair_diff: bool
     purge: bool
     det_selection: list[str] | None = None
@@ -36,34 +38,38 @@ class ObservationData:
     det_flags: str = defaults.det_flags
     shared_flags: str = defaults.shared_flags
 
-    @property
-    def nnz(self) -> int:
-        return 2 if self.pair_diff else 3
+    def __post_init__(self):
+        # Run some checks
+        if self.nnz not in (1, 2, 3):
+            raise ValueError('nnz must be either 1, 2, or 3')
 
     @property
     def samples(self) -> int:
-        return self.observation.n_local_samples
+        return self.ob.n_local_samples
 
     @property
     def local_block_sizes(self) -> npt.NDArray[lib.INDEX_TYPE]:
         # FIXME: When we take flags into account, we need to update this
-        return np.array([self.samples for _ in self.sdets], dtype=lib.INDEX_TYPE)
+        return np.array([self.samples for _ in self.fdets], dtype=lib.INDEX_TYPE)
 
     @ft.cached_property
     def sdets(self) -> list[str]:
-        """Return a list of the detector names"""
-        return self.observation.select_local_detectors(
-            selection=self.det_selection, flagmask=self.det_mask
-        )
+        """Return a list of the selected detector names"""
+        return self.ob.select_local_detectors(selection=self.det_selection, flagmask=self.det_mask)
 
     @property
-    def even_dets(self) -> list[str]:
-        """Return a list of the even detector names"""
-        return self.sdets[::2]
+    def fdets(self) -> list[str]:
+        """Return a list of the 'final' detector names (including pair diff logic)"""
+        return self.sdets[::2] if self.pair_diff else self.sdets
+
+    @property
+    def fdets_prefix(self) -> list[str]:
+        """Return a list of detector name prefixes (common part between even and odd ones)"""
+        return [commonprefix([a, b]) for a, b in pairwise(self.sdets)]
 
     @property
     def focalplane(self) -> toast.Focalplane:
-        return self.observation.telescope.focalplane
+        return self.ob.telescope.focalplane
 
     @property
     def sample_rate(self) -> float:
@@ -73,20 +79,20 @@ class ObservationData:
     @property
     def telescope_uids(self) -> npt.NDArray[lib.META_ID_TYPE]:
         # NB: we duplicate the information on purpose
-        return np.array(
-            [self.observation.telescope.uid for _ in self.sdets], dtype=lib.META_ID_TYPE
-        )
+        return np.array([self.ob.telescope.uid for _ in self.fdets], dtype=lib.META_ID_TYPE)
 
     @property
     def session_uids(self) -> npt.NDArray[lib.META_ID_TYPE]:
         # NB: we duplicate the information on purpose
-        if (session := self.observation.session) is None:
+        if (session := self.ob.session) is None:
             raise ValueError('Observation does not have a session attribute')
-        return np.array([session.uid for _ in self.sdets], dtype=lib.META_ID_TYPE)
+        return np.array([session.uid for _ in self.fdets], dtype=lib.META_ID_TYPE)
 
     @property
     def detector_uids(self) -> npt.NDArray[lib.META_ID_TYPE]:
-        return np.array([name_UID(det, int64=True) for det in self.sdets], dtype=lib.META_ID_TYPE)
+        return np.array(
+            [name_UID(det, int64=True) for det in self.fdets_prefix], dtype=lib.META_ID_TYPE
+        )
 
     def transform_pairs(
         self, a: npt.NDArray, operation: ValidPairDiffTransform = 'half-sub'
@@ -104,29 +110,24 @@ class ObservationData:
         return transformed.astype(a.dtype)
 
     def get_signal(self) -> npt.NDArray[lib.SIGNAL_TYPE]:
-        signal = np.array(
-            self.observation.detdata[self.det_data][self.sdets, :], dtype=lib.SIGNAL_TYPE
-        )
+        signal = np.array(self.ob.detdata[self.det_data][self.sdets, :], dtype=lib.SIGNAL_TYPE)
         if self.purge:
-            del self.observation.detdata[self.det_data]
+            del self.ob.detdata[self.det_data]
         return self.transform_pairs(signal)
 
     def get_noise(self) -> npt.NDArray[lib.SIGNAL_TYPE]:
         if self.noise_data is None:
             raise RuntimeError('Can not access noise without a field name')
-        noise = np.array(
-            self.observation.detdata[self.noise_data][self.sdets, :], dtype=lib.SIGNAL_TYPE
-        )
+        noise = np.array(self.ob.detdata[self.noise_data][self.sdets, :], dtype=lib.SIGNAL_TYPE)
         if self.purge:
-            del self.observation.detdata[self.noise_data]
+            del self.ob.detdata[self.noise_data]
         return self.transform_pairs(noise)
 
     def get_indices(self, op: PixelsHealpix) -> npt.NDArray[lib.INDEX_TYPE]:
         # When doing pair differencing, we get the indices from the even detectors
-        dets = self.even_dets if self.pair_diff else self.sdets
-        indices = np.array(self.observation.detdata[op.pixels][dets, :], dtype=lib.INDEX_TYPE)
+        indices = np.array(self.ob.detdata[op.pixels][self.fdets, :], dtype=lib.INDEX_TYPE)
         if self.purge:
-            del self.observation.detdata[op.pixels]
+            del self.ob.detdata[op.pixels]
         # Arrange the pixel indices for Mappraiser
         indices = np.repeat(indices, nnz := self.nnz) * nnz
         for i in range(nnz):
@@ -134,18 +135,24 @@ class ObservationData:
         return indices
 
     def get_weights(self, op: StokesWeights) -> npt.NDArray[lib.WEIGHT_TYPE]:
-        weights = np.array(
-            self.observation.detdata[op.weights][self.sdets, :], dtype=lib.WEIGHT_TYPE
-        )
+        weights = np.array(self.ob.detdata[op.weights][self.sdets, :], dtype=lib.WEIGHT_TYPE)
+        # we always expect I/Q/U weights to be provided
+        assert weights.shape[-1] == 3
+        if self.nnz == 1:
+            # only I weights
+            weights = weights[..., 0]
+        elif self.nnz == 2:
+            # only Q/U weights
+            weights = weights[..., 1:]
         if self.purge:
-            del self.observation.detdata[op.weights]
+            del self.ob.detdata[op.weights]
         return self.transform_pairs(weights)
 
     def get_interp_psds(self, fft_size: int, rate: float = 1.0):
         """Return a 2-d array of interpolated PSDs for the selected detectors"""
         if self.noise_model is None:
             raise ValueError('Noise model not provided')
-        model = self.observation[self.noise_model]
+        model = self.ob[self.noise_model]
         psds = np.array(
             [
                 interpolate_psd(
@@ -167,6 +174,7 @@ class ToastContainer:
     """A wrapper around the TOAST Data object with additional functionality."""
 
     data: toast.Data
+    nnz: int
     pair_diff: bool
     purge: bool
     det_selection: list[str] | None = None
@@ -213,17 +221,13 @@ class ToastContainer:
     @property
     def n_local_blocks(self) -> int:
         """Compute the number of local blocks, summed over all observations"""
-        s = sum(len(ob.sdets) for ob in self._obs)
-        if self.pair_diff:
-            return s // 2
+        s = sum(len(ob.fdets) for ob in self._obs)
         return s
 
     @property
     def local_data_size(self) -> int:
         """Compute the size of the local signal buffer"""
-        s = sum(ob.samples * len(ob.sdets) for ob in self._obs)
-        if self.pair_diff:
-            return s // 2
+        s = sum(ob.samples * len(ob.fdets) for ob in self._obs)
         return s
 
     @property
@@ -247,7 +251,8 @@ class ToastContainer:
     def _obs(self) -> list[ObservationData]:
         return [
             ObservationData(
-                observation=ob,
+                ob=ob,
+                nnz=self.nnz,
                 pair_diff=self.pair_diff,
                 purge=self.purge,
                 det_selection=self.det_selection,
@@ -266,7 +271,7 @@ class ToastContainer:
     def _synthesized_obs(self, operator: Operator | None = None) -> list[ObservationData]:
         def synthesize(ob: ObservationData):
             if operator is not None:
-                _ = operator.apply(self.data.select(obs_uid=ob.observation.uid), detectors=ob.sdets)
+                _ = operator.apply(self.data.select(obs_uid=ob.ob.uid), detectors=ob.sdets)
             return ob
 
         return [synthesize(ob) for ob in self._obs]

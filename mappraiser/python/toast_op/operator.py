@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import TypeAlias
+from typing import Literal, TypeAlias
 
 import astropy.units as u
 import numpy as np
@@ -170,18 +170,13 @@ class MapMaker(ToastOperator):
         if self.binned:
             self.lagmax = 1
 
-        nnz_full = len(self.stokes_weights.mode)  # 3, but keep it for future expansion
-        if self.pair_diff:
-            if self.estimate_spin_zero:
-                self._nnz = nnz_full
-            else:
-                self._nnz = nnz_full - 1
-        else:
-            self._nnz = nnz_full
-
         # If not doing pair differencing, I/Q/U are all estimated
         if not self.pair_diff:
             self.estimate_spin_zero = True
+
+        self._nnz = 3
+        if not self.estimate_spin_zero:
+            self._nnz = 2
 
         self.fsample = data.obs[0].telescope.focalplane.sample_rate.to_value(u.Hz)  # pyright: ignore[reportAttributeAccessIssue]
 
@@ -221,6 +216,7 @@ class MapMaker(ToastOperator):
         # Wrap the TOAST Data container into our custom class
         ctnr = ToastContainer(
             data,
+            self._nnz,
             self.pair_diff,
             self.purge_det_data,
             det_selection=detectors,
