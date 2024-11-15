@@ -20,19 +20,10 @@ except OSError:
         raise ImportError('Mappraiser library not found')
     _mappraiser = ct.CDLL(path)
 
-try:
-    if MPI._sizeof(MPI.Comm) == ct.sizeof(ct.c_int):
-        MPI_Comm = ct.c_int
-    else:
-        MPI_Comm = ct.c_void_p
-except Exception:
-    print('Failed to set the portable MPI comunicator datatype')
-    raise
-
-
-def _encode_comm(comm):
-    comm_ptr = MPI._addressof(comm)
-    return MPI_Comm.from_address(comm_ptr)
+if MPI._sizeof(MPI.Comm) == ct.sizeof(ct.c_int):
+    MPI_Comm = ct.c_int
+else:
+    MPI_Comm = ct.c_void_p
 
 
 ############################################################
@@ -99,8 +90,11 @@ def MLmap(
 
     comm.Barrier()
 
+    # https://github.com/mpi4py/mpi4py/blob/master/demo/wrap-ctypes/helloworld.py
+    comm_c = MPI_Comm(comm.handle)
+
     _mappraiser.MLmap(  # pyright: ignore[reportOptionalMemberAccess]
-        _encode_comm(comm),
+        comm_c,
         outpath,
         ref,
         params['solver'],
