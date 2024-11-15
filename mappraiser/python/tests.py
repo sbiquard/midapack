@@ -23,16 +23,20 @@ def run():
     if world is None:
         print('MPI not available, skipping tests')
         return
+    def _print(msg):
+        if world.rank == 0:
+            print(msg)
     with toast.mpi.exception_guard(comm=world):
         test1 = InterfaceTest(pair_diff=False, subdir='full_iqu')
         test2 = InterfaceTest(pair_diff=True, subdir='pair_diff')
-        print('Running InterfaceTest with pair_diff=False\n')
+        _print('Running InterfaceTest with pair_diff=False\n')
         test1.run()
-        print(separator)
-        print('Running InterfaceTest with pair_diff=True\n')
         world.barrier()
+        _print(separator)
+        _print('Running InterfaceTest with pair_diff=True\n')
         test2.run()
-        print(separator)
+        world.barrier()
+        _print(separator)
 
 
 def create_outdir(
