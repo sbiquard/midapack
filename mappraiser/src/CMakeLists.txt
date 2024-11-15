@@ -92,14 +92,9 @@ if (MKL_FOUND)
     target_compile_definitions(mappraiser PRIVATE HAVE_MKL)
     target_include_directories(mappraiser PUBLIC "${MKL_INCLUDE_DIRS}")
     target_link_libraries(mappraiser PUBLIC "${MKL_LIBRARIES}")
-elseif (LAPACK_FOUND)
-    # BLAS/LAPACK
-    #    set_target_properties(mappraiser PROPERTIES LINK_FLAGS
-    #                          "${LAPACK_LINKER_FLAGS}" #${BLAS_LINKER_FLAGS}"
-    #                          )
-    #    target_link_libraries(mappraiser PUBLIC "${LAPACK_LIBRARIES}")
-    #    target_link_libraries(mappraiser "${BLAS_LIBRARIES}")
-    target_link_libraries(mappraiser PUBLIC LAPACK::LAPACK)
+elseif (LAPACKE_FOUND)
+    target_include_directories(mappraiser PUBLIC "${LAPACKE_INCLUDE_DIRS}")
+    target_link_libraries(mappraiser PUBLIC "${LAPACKE_LIBRARIES}")
 endif ()
 
 # ----------------------------------------------------------------------------------------#

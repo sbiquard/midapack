@@ -1,1 +1,0 @@
-from .mappraiser import Mappraiser

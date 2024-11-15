@@ -1,5 +1,5 @@
 # Determine our python install location and set up a rule to install the modules
-find_package(Python3 3.8 COMPONENTS Interpreter REQUIRED)
+find_package(Python3 3.10 COMPONENTS Interpreter REQUIRED)
 
 execute_process(
     COMMAND "${Python3_EXECUTABLE}" -c "if True:
@@ -13,8 +13,15 @@ execute_process(
 # to use on many systems.
 #set(PYTHON_SITE
 #    "${CMAKE_INSTALL_LIBDIR}/python${PYTHON_MAJORMINOR}/site-packages")
-set(PYTHON_SITE "lib/python${PYTHON_MAJORMINOR}/site-packages/pymappraiser")
+set(PYTHON_SITE "lib/python${PYTHON_MAJORMINOR}/site-packages/mappraiser")
 
-add_subdirectory(toast)
+# Install the top-level __init__.py file
+install(FILES
+    __init__.py
+    tests.py
+    DESTINATION ${PYTHON_SITE}
+)
+
+add_subdirectory(toast_op)
 add_subdirectory(workflow)
 add_subdirectory(wrapper)

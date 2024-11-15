@@ -84,8 +84,8 @@ if (MKL_FOUND)
     set(LAPACK_FOUND TRUE)
 else ()
     # We need a BLAS/LAPACK implementation other than MKL
-    find_package(BLAS)
     find_package(LAPACK REQUIRED)
+    find_package(LAPACKE REQUIRED)
 endif ()
 
 # ----------------------------------------------------------------------------------------#

@@ -46,9 +46,9 @@ from toast.mpi import MPI, Comm
 from toast.observation import default_values as defaults
 from toast.utils import Environment, Logger, memreport
 
-pixell.fft.engine = "fftw"
+pixell.fft.engine = 'fftw'
 
-from pymappraiser.workflow import mapmaker_mappraiser, setup_mapmaker_mappraiser
+from mappraiser.workflow import mapmaker_mappraiser, setup_mapmaker_mappraiser
 
 
 def simulate_data(job, otherargs, runargs, comm):
@@ -58,7 +58,7 @@ def simulate_data(job, otherargs, runargs, comm):
     if job_ops.sim_ground.enabled:
         # do not split observations by wafer
         # FIXME: this is a hack because splitting by wafer breaks our data staging
-        job_ops.sim_ground.session_split_key = "tube_slot"
+        job_ops.sim_ground.session_split_key = 'tube_slot'
         data = wrk.simulate_observing(job, otherargs, runargs, comm)
     else:
         group_size = wrk.reduction_group_size(job, runargs, comm)
@@ -99,13 +99,13 @@ def simulate_data(job, otherargs, runargs, comm):
     wrk.simulate_calibration_error(job, otherargs, runargs, data)
     wrk.simulate_readout_effects(job, otherargs, runargs, data)
 
-    mem = memreport(msg="(whole node)", comm=comm, silent=True)
-    log.info_rank(f"After simulating data:  {mem}", comm)
+    mem = memreport(msg='(whole node)', comm=comm, silent=True)
+    log.info_rank(f'After simulating data:  {mem}', comm)
 
     wrk.save_data_hdf5(job, otherargs, runargs, data)
 
-    mem = memreport(msg="(whole node)", comm=comm, silent=True)
-    log.info_rank(f"After saving data:  {mem}", comm)
+    mem = memreport(msg='(whole node)', comm=comm, silent=True)
+    log.info_rank(f'After saving data:  {mem}', comm)
 
     return data
 
@@ -138,15 +138,15 @@ def reduce_data(job, otherargs, runargs, data):
 
     wrk.filtered_statistics(job, otherargs, runargs, data)
 
-    mem = memreport(msg="(whole node)", comm=data.comm.comm_world, silent=True)
-    log.info_rank(f"After reducing data:  {mem}", data.comm.comm_world)
+    mem = memreport(msg='(whole node)', comm=data.comm.comm_world, silent=True)
+    log.info_rank(f'After reducing data:  {mem}', data.comm.comm_world)
 
 
 def main():
     env = Environment.get()
     log = Logger.get()
     gt = toast.timing.GlobalTimers.get()
-    gt.start("toast_so_sim (total)")
+    gt.start('toast_so_sim (total)')
     timer = toast.timing.Timer()
     timer.start()
 
@@ -156,42 +156,42 @@ def main():
     # If the user has not told us to use multiple threads,
     # then just use one.
 
-    if "OMP_NUM_THREADS" in os.environ:
-        nthread = os.environ["OMP_NUM_THREADS"]
+    if 'OMP_NUM_THREADS' in os.environ:
+        nthread = os.environ['OMP_NUM_THREADS']
     else:
         nthread = 1
     log.info_rank(
-        f"Executing workflow with {procs} MPI tasks, each with "
-        f"{nthread} OpenMP threads at {datetime.datetime.now()}",
+        f'Executing workflow with {procs} MPI tasks, each with '
+        f'{nthread} OpenMP threads at {datetime.datetime.now()}',
         comm,
     )
 
-    mem = memreport(msg="(whole node)", comm=comm, silent=True)
-    log.info_rank(f"Start of the workflow:  {mem}", comm)
+    mem = memreport(msg='(whole node)', comm=comm, silent=True)
+    log.info_rank(f'Start of the workflow:  {mem}', comm)
 
     # Argument parsing
-    parser = argparse.ArgumentParser(description="SO simulation pipeline")
+    parser = argparse.ArgumentParser(description='SO simulation pipeline')
 
     parser.add_argument(
-        "--out_dir",
+        '--out_dir',
         required=False,
         type=str,
-        default="toast_out",
-        help="The output directory",
+        default='toast_out',
+        help='The output directory',
     )
     parser.add_argument(
-        "--obsmaps",
+        '--obsmaps',
         required=False,
         default=False,
-        action="store_true",
-        help="Map each observation separately.",
+        action='store_true',
+        help='Map each observation separately.',
     )
     parser.add_argument(
-        "--zero_loaded_data",
+        '--zero_loaded_data',
         required=False,
         default=False,
-        action="store_true",
-        help="Zero out detector data loaded from disk",
+        action='store_true',
+        help='Zero out detector data loaded from disk',
     )
 
     # The operators and templates we want to configure from the command line
@@ -265,17 +265,17 @@ def main():
             os.makedirs(otherargs.out_dir, exist_ok=True)
 
     # Log the config that was actually used at runtime.
-    outlog = os.path.join(otherargs.out_dir, "config_log.toml")
+    outlog = os.path.join(otherargs.out_dir, 'config_log.toml')
     toast.config.dump_toml(outlog, config, comm=comm)
 
     # If this is a dry run, exit
     if otherargs.dry_run:
-        log.info_rank("Dry-run complete", comm=comm)
+        log.info_rank('Dry-run complete', comm=comm)
         return
 
     data = simulate_data(job, otherargs, runargs, comm)
     if data is None:
-        log.info_rank("Simulation failed", comm=comm)
+        log.info_rank('Simulation failed', comm=comm)
         return
 
     if not job.operators.sim_atmosphere.cache_only:
@@ -285,10 +285,10 @@ def main():
     # Collect optional timing information
     alltimers = toast.timing.gather_timers(comm=comm)
     if data.comm.world_rank == 0:
-        out = os.path.join(otherargs.out_dir, "timing")
+        out = os.path.join(otherargs.out_dir, 'timing')
         toast.timing.dump(alltimers, out)
 
-    log.info_rank("Workflow completed in", comm=comm, timer=timer)
+    log.info_rank('Workflow completed in', comm=comm, timer=timer)
 
 
 def cli():
@@ -297,5 +297,5 @@ def cli():
         main()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     cli()
