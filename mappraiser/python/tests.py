@@ -14,6 +14,8 @@ from toast.tests._helpers import (
 )
 from toast.vis import set_matplotlib_backend
 
+separator = '\n------------------------------------------------------------\n'
+
 
 def run():
     # Run the unit tests
@@ -24,9 +26,13 @@ def run():
     with toast.mpi.exception_guard(comm=world):
         test1 = InterfaceTest(pair_diff=False, subdir='full_iqu')
         test2 = InterfaceTest(pair_diff=True, subdir='pair_diff')
+        print('Running InterfaceTest with pair_diff=False\n')
         test1.run()
+        print(separator)
+        print('Running InterfaceTest with pair_diff=True\n')
         world.barrier()
         test2.run()
+        print(separator)
 
 
 def create_outdir(
@@ -111,13 +117,7 @@ class InterfaceTest:
 
             fig = plt.figure(figsize=(12, 8), dpi=72)
             ax = fig.add_subplot(1, 1, 1, aspect='auto')
-            ax.plot(
-                xdata,
-                ydata,
-                marker='o',
-                c='red',
-                label=f'{ob.name}, {det}',
-            )
+            ax.plot(xdata, ydata, label=f'{ob.name}, {det}')
             # cur_ylim = ax.get_ylim()
             # ax.set_ylim([0.001 * (nse.NET(det) ** 2), 10.0 * cur_ylim[1]])
             ax.legend(loc=1)
@@ -144,17 +144,11 @@ class InterfaceTest:
             ob = data.obs[0]
             det = ob.local_detectors[0]
             xdata = ob.shared['times'].data
-            ydata = ob.detdata['signal'][det]
+            ydata = ob.detdata['signal'][det] + ob.detdata['noise'][det]
 
             fig = plt.figure(figsize=(12, 8), dpi=72)
             ax = fig.add_subplot(1, 1, 1, aspect='auto')
-            ax.plot(
-                xdata,
-                ydata,
-                marker='o',
-                c='red',
-                label=f'{ob.name}, {det}',
-            )
+            ax.plot(xdata, ydata, label=f'{ob.name}, {det}')
             # cur_ylim = ax.get_ylim()
             # ax.set_ylim([0.001 * (nse.NET(det) ** 2), 10.0 * cur_ylim[1]])
             ax.legend(loc=1)
@@ -187,13 +181,7 @@ class InterfaceTest:
 
             fig = plt.figure(figsize=(12, 8), dpi=72)
             ax = fig.add_subplot(1, 1, 1, aspect='auto')
-            ax.plot(
-                xdata,
-                ydata,
-                marker='o',
-                c='red',
-                label=f'{ob.name}, {det}',
-            )
+            ax.plot(xdata, ydata, label=f'{ob.name}, {det}')
             # cur_ylim = ax.get_ylim()
             # ax.set_ylim([0.001 * (nse.NET(det) ** 2), 10.0 * cur_ylim[1]])
             ax.legend(loc=1)
