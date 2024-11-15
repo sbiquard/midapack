@@ -153,6 +153,9 @@ class MapMaker(ToastOperator):
         self._make_maps()
         self._log_info('Processed data')
 
+    def _finalize(self, *args, **kwargs):
+        pass
+
     @function_timer
     def _prepare(self, data: ToastData):
         """Examine the data and determine quantities needed to set up the mappraiser run"""
