@@ -3,7 +3,6 @@ install(FILES
     buffer.py
     interface.py
     operator.py
-    test.py
     utils.py
     DESTINATION ${PYTHON_SITE}/toast_op
 )

@@ -2,9 +2,9 @@ import os
 from pathlib import Path
 
 import numpy as np
+import toast.mpi
 import toast.ops as ops
 from mpi4py.MPI import Comm, Intracomm
-from toast.mpi import MPI, use_mpi
 from toast.observation import default_values as defaults
 from toast.tests._helpers import (
     close_data,
@@ -13,6 +13,20 @@ from toast.tests._helpers import (
     fake_flags,
 )
 from toast.vis import set_matplotlib_backend
+
+
+def run():
+    # Run the unit tests
+    world, procs, rank = toast.mpi.get_world()
+    if world is None:
+        print('MPI not available, skipping tests')
+        return
+    with toast.mpi.exception_guard(comm=world):
+        test1 = InterfaceTest(pair_diff=False, subdir='full_iqu')
+        test2 = InterfaceTest(pair_diff=True, subdir='pair_diff')
+        test1.run()
+        world.barrier()
+        test2.run()
 
 
 def create_outdir(
@@ -41,17 +55,17 @@ def create_outdir(
 
 
 class InterfaceTest:
-    def __init__(self, pair_diff: bool = False):
+    def __init__(self, pair_diff: bool = False, subdir: str | os.PathLike | None = None):
         self.comm = None
-        if use_mpi:
-            self.comm = MPI.COMM_WORLD
-        self.outdir = create_outdir(self.comm)
+        if toast.mpi.use_mpi:
+            self.comm = toast.mpi.MPI.COMM_WORLD
+        self.outdir = create_outdir(self.comm, subdir)
         self.pair_diff = pair_diff
         # np.random.seed(123456)
 
     def run(self):
         try:
-            from .operator import MapMaker
+            from .toast_op.operator import MapMaker
         except ImportError:
             print('Mappraiser not available, skipping tests')
             return

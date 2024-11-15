@@ -18,6 +18,7 @@ set(PYTHON_SITE "lib/python${PYTHON_MAJORMINOR}/site-packages/mappraiser")
 # Install the top-level __init__.py file
 install(FILES
     __init__.py
+    tests.py
     DESTINATION ${PYTHON_SITE}
 )
 
