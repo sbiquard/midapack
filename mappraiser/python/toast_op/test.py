@@ -107,18 +107,13 @@ class InterfaceTest:
             # ax.set_ylim([0.001 * (nse.NET(det) ** 2), 10.0 * cur_ylim[1]])
             ax.legend(loc=1)
             plt.title('Sky Signal')
-            savefile = self.outdir / f'signal_sky_{ob.name}_{det}.pdf'
+            savefile = self.outdir / f'signal_sky_{ob.name}_{det}.png'
             plt.savefig(savefile)
             plt.close()
 
         # Create an uncorrelated noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel()
         default_model.apply(data)
-
-        print(
-            f"psd unit = {data.obs[0]['noise_model'].psd(data.obs[0].local_detectors[0]).unit}",
-            flush=True,
-        )
 
         # Simulate noise from this model
         sim_noise = ops.SimNoise(det_data='noise')
@@ -149,7 +144,7 @@ class InterfaceTest:
             # ax.set_ylim([0.001 * (nse.NET(det) ** 2), 10.0 * cur_ylim[1]])
             ax.legend(loc=1)
             plt.title('Sky + Noise Signal')
-            savefile = self.outdir / f'signal_sky-noise_{ob.name}_{det}.pdf'
+            savefile = self.outdir / f'signal_sky-noise_{ob.name}_{det}.png'
             plt.savefig(savefile)
             plt.close()
 
@@ -188,7 +183,7 @@ class InterfaceTest:
             # ax.set_ylim([0.001 * (nse.NET(det) ** 2), 10.0 * cur_ylim[1]])
             ax.legend(loc=1)
             plt.title('Sky + Noise + Offset Signal')
-            savefile = self.outdir / f'signal_sky-noise-offset_{ob.name}_{det}.pdf'
+            savefile = self.outdir / f'signal_sky-noise-offset_{ob.name}_{det}.png'
             plt.savefig(savefile)
             plt.close()
 
