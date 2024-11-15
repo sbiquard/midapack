@@ -18,7 +18,7 @@ def setup_mapmaker_mappraiser(parser, operators):
         default='run0',
         help='Reference that is added to the name of the output maps.',
     )
-    operators.append(mappraiser_op.Mappraiser(name='mappraiser', enabled=False))
+    operators.append(mappraiser_op.MapMaker(name='mappraiser', enabled=False))
 
 
 @workflow_timer
@@ -39,6 +39,4 @@ def mapmaker_mappraiser(job, otherargs, runargs, data):
         job_ops.mappraiser.params['ref'] = otherargs.ref
         job_ops.mappraiser.pixel_pointing = job.pixels_final
         job_ops.mappraiser.stokes_weights = job.weights_final
-        job_ops.mappraiser.az_name = job_ops.sim_ground.azimuth
-        job_ops.mappraiser.hwpangle_name = job_ops.sim_ground.hwp_angle
         job_ops.mappraiser.apply(data)
