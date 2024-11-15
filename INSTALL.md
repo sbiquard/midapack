@@ -62,6 +62,7 @@ PREALPS_ROOT=<path> cmake [...]
 ### Python
 
 The mappraiser library comes with a Python wrapper and an interface to the TOAST library (<https://github.com/hpc4cmb/toast>).
+Python 3.10 is required.
 These files are installed in `<prefix>/lib/python3.xx/site-packages/mappraiser` (adapt with the version of Python you are using).
 
 It may be useful to prepend this path to your `PYTHONPATH` by adding the following line in your `.bashrc` (or equivalent):
@@ -78,7 +79,7 @@ If TOAST is installed on your system, you can run Python unit tests using the fo
 python -c "import mappraiser.tests; mappraiser.tests.run()"
 ```
 
-If mpi4py is installed, run the parallel version using the following command:
+Run the parallel version using the following command:
 
 ```bash
 mpirun -n 4 python -c "import mappraiser.tests; mappraiser.tests.run()"
