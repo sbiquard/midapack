@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Literal, TypeAlias
+from typing import TypeAlias
 
 import astropy.units as u
 import numpy as np
@@ -34,8 +34,8 @@ class MapMaker(ToastOperator):
     API = Int(0, help='Internal interface version for this operator')
 
     # Operators which we depend on
-    pixel_pointing = Instance(klass=PixelsHealpix, help='Operator to generate healpix indices')
-    stokes_weights = Instance(klass=StokesWeights, help='Operator to generate I/Q/U weights')
+    pixel_pointing = Instance(klass=PixelsHealpix, allow_none=True, help='Operator to generate healpix indices')  # noqa # fmt: skip
+    stokes_weights = Instance(klass=StokesWeights, allow_none=True, help='Operator to generate I/Q/U weights')  # noqa # fmt: skip
 
     # TOAST names
     det_data = Unicode(defaults.det_data, help='Observation detdata key for the timestream data')
@@ -83,12 +83,12 @@ class MapMaker(ToastOperator):
     @traitlets.validate('stokes_weights')
     def _check_stokes_weights(self, proposal):
         # Check that Stokes weights operator provide I/Q/U weights
-        check = proposal['value']
-        if check.mode != 'IQU':
+        weights = proposal['value']
+        if weights is not None and weights.mode != 'IQU':
             msg = 'Mappraiser assumes that I, Q and U weights are provided'
-            msg += f'but stokes_weights operator has {check.mode=!r}'
-            raise RuntimeError(msg)
-        return check
+            msg += f'but stokes_weights operator has {weights.mode=!r}'
+            raise traitlets.TraitError(msg)
+        return weights
 
     @traitlets.validate('det_mask')
     def _check_det_mask(self, proposal):
@@ -163,6 +163,12 @@ class MapMaker(ToastOperator):
         if len(data.obs) == 0:
             raise RuntimeError('Every supplied data object must contain at least one observation')
 
+        # Check that the pixel_pointing and stokes_weights operators are set
+        if self.pixel_pointing is None:
+            raise RuntimeError('pixel_pointing operator must be set')
+        if self.stokes_weights is None:
+            raise RuntimeError('stokes_weights operator must be set')
+
         # Check if the noise data is available and set dependent traits
         if self.noise_data is None:
             self.zero_noise = True
@@ -190,7 +196,7 @@ class MapMaker(ToastOperator):
                 'gap_stgy': self.gap_stgy,
                 'lambda': self.lagmax,
                 'maxiter': self.maxiter,
-                'nside': self.pixel_pointing.nside,
+                'nside': self.pixel_pointing.nside,  # pyright: ignore[reportAttributeAccessIssue]
                 'ortho_alg': self.ortho_alg,
                 'output_dir': self.output_dir,
                 'precond': self.precond,
@@ -246,8 +252,8 @@ class MapMaker(ToastOperator):
         noise = ctnr.get_noise()
 
         # Pointing and weights
-        pixels = ctnr.get_pointing_indices(self.pixel_pointing)
-        weights = ctnr.get_pointing_weights(self.stokes_weights)
+        pixels = ctnr.get_pointing_indices(self.pixel_pointing)  # pyright: ignore[reportArgumentType]
+        weights = ctnr.get_pointing_weights(self.stokes_weights)  # pyright: ignore[reportArgumentType]
 
         # Inverse noise covariance
         invntt, ntt = self._get_invntt(ctnr, noise, block_sizes)
