@@ -67,7 +67,7 @@ class MapMaker(ToastOperator):
 
     # Underlying mappraiser configuration
     bs_red = Int(0, help='Use dynamic search reduction')
-    enlFac = Int(1, help='Enlargement factor for ECG')
+    enl_fac = Int(1, help='Enlargement factor for ECG')
     fill_gaps = Bool(True, help='Perform gap filling on the data')
     gap_stgy = UseEnum(lib.GapStrategy, help='Strategy for handling timestream gaps')
     maxiter = Int(3000, help='Maximum number of iterations allowed for the solver')
@@ -190,7 +190,7 @@ class MapMaker(ToastOperator):
         self.params.update(
             {
                 'bs_red': self.bs_red,
-                'enlFac': self.enlFac,
+                'enl_fac': self.enl_fac,
                 'fill_gaps': self.fill_gaps,
                 'fsample': self.fsample,
                 'gap_stgy': self.gap_stgy,

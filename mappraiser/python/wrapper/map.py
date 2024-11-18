@@ -41,7 +41,7 @@ _mappraiser.MLmap.argtypes = [  # pyright: ignore[reportOptionalMemberAccess]
     ct.c_int,  # pointing_commflag
     ct.c_double,  # tol
     ct.c_int,  # maxIter
-    ct.c_int,  # enlFac
+    ct.c_int,  # enl_fac
     ct.c_int,  # ortho_alg
     ct.c_int,  # bs_red
     ct.c_int,  # nside
@@ -103,7 +103,7 @@ def MLmap(
         params['ptcomm_flag'],
         params['tol'],
         params['maxiter'],
-        params['enlFac'],
+        params['enl_fac'],
         params['ortho_alg'],
         params['bs_red'],
         params['nside'],

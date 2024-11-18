@@ -39,7 +39,7 @@ void x2map_pol(double *mapI, double *mapQ, double *mapU, double *Cond,
 
 void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
            int Z_2lvl, int pointing_commflag, double tol, int maxiter,
-           int enlFac, int ortho_alg, int bs_red, int nside, int gap_stgy,
+           int enl_fac, int ortho_alg, int bs_red, int nside, int gap_stgy,
            bool do_gap_filling, uint64_t realization, void *data_size_proc,
            int nb_blocks_loc, void *local_blocks_sizes, double sample_rate,
            uint64_t *detindxs, uint64_t *obsindxs, uint64_t *telescopes,
@@ -310,7 +310,7 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
     } else if (solver == 1) {
 #ifdef WITH_ECG
         ECG_GLS(outpath, ref, &A, &Nm1, &(P->BJ_inv), P->pixpond, x, signal,
-                noise, tol, maxiter, enlFac, ortho_alg, bs_red);
+                noise, tol, maxiter, enl_fac, ortho_alg, bs_red);
 #else
         if (rank == 0)
             fprintf(stderr,

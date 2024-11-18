@@ -23,9 +23,11 @@ def run():
     if world is None:
         print('MPI not available, skipping tests')
         return
+
     def _print(msg):
         if world.rank == 0:
             print(msg)
+
     with toast.mpi.exception_guard(comm=world):
         test1 = InterfaceTest(pair_diff=False, subdir='full_iqu')
         test2 = InterfaceTest(pair_diff=True, subdir='pair_diff')

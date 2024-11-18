@@ -79,7 +79,7 @@ int main(int argc, char *argv[]) {
     int pointing_commflag;
     double tol = 1e-6;
     int maxiter = 100;
-    int enlFac = 1;
+    int enl_fac = 1;
     int ortho_alg = 1;
     int bs_red = 0;
     int nside = 512;
@@ -349,7 +349,7 @@ int main(int argc, char *argv[]) {
 
 #if 1
     MLmap(MPI_COMM_WORLD, outpath, ref, solver, precond, Z_2lvl,
-          pointing_commflag, tol, maxiter, enlFac, ortho_alg, bs_red, nside,
+          pointing_commflag, tol, maxiter, enl_fac, ortho_alg, bs_red, nside,
           gap_stgy, do_gap_filling, realization, data_size_proc.data(),
           nb_blocks_loc, local_blocks_sizes.data(), sample_rate,
           detindxs.data(), obsindxs.data(), telescopes.data(), Nnz, pix.data(),
