@@ -12,7 +12,7 @@ from toast.ops.operator import Operator as ToastOperator
 from toast.ops.pixels_healpix import PixelsHealpix
 from toast.ops.stokes_weights import StokesWeights
 from toast.timing import Timer, function_timer
-from toast.traits import Bool, Dict, Float, Instance, Int, Unicode, UseEnum, trait_docs
+from toast.traits import Bool, Float, Instance, Int, Unicode, UseEnum, trait_docs
 from toast.utils import Logger
 
 from .. import wrapper as lib
@@ -61,7 +61,6 @@ class MapMaker(ToastOperator):
     pair_diff = Bool(False, help='Process differenced timestreams')
     plot_tod = Bool(False, help='Plot the signal+noise TOD after staging')
     purge_det_data = Bool(True, help='Clear all observation detector data after staging')
-    ref = Unicode('run0', help='Reference that is added to the name of the output maps')
     zero_noise = Bool(False, help='Fill the noise buffer with zero')
     zero_signal = Bool(False, help='Fill the signal buffer with zero')
 
@@ -72,10 +71,10 @@ class MapMaker(ToastOperator):
     gap_stgy = UseEnum(lib.GapStrategy, help='Strategy for handling timestream gaps')
     maxiter = Int(3000, help='Maximum number of iterations allowed for the solver')
     ortho_alg = Int(1, help='Orthogonalization scheme for ECG (O->odir, 1->omin)')
-    params = Dict(default_value={}, help='Parameters to pass to mappraiser')
     precond = UseEnum(lib.PrecondType, help='Preconditiner choice')
     ptcomm_flag = Int(6, help='Choose collective communication scheme')
     realization = Int(0, help='Noise realization index (for gap filling)')
+    ref = Unicode('run0', help='Reference that is added to the name of the output maps')
     solver = UseEnum(lib.SolverType, help='Solver choice')
     tol = Float(1e-12, help='Convergence threshold for the iterative solver')
     z_2lvl = Int(0, help='Size of 2lvl deflation space')
@@ -187,34 +186,32 @@ class MapMaker(ToastOperator):
         self.fsample = data.obs[0].telescope.focalplane.sample_rate.to_value(u.Hz)  # pyright: ignore[reportAttributeAccessIssue]
 
         # Populate the parameter dictionary passed to the C code
-        self.params.update(
-            {
-                'bs_red': self.bs_red,
-                'enl_fac': self.enl_fac,
-                'fill_gaps': self.fill_gaps,
-                'fsample': self.fsample,
-                'gap_stgy': self.gap_stgy,
-                'lambda': self.lagmax,
-                'maxiter': self.maxiter,
-                'nside': self.pixel_pointing.nside,  # pyright: ignore[reportAttributeAccessIssue]
-                'ortho_alg': self.ortho_alg,
-                'output_dir': self.output_dir,
-                'precond': self.precond,
-                'ptcomm_flag': self.ptcomm_flag,
-                'realization': self.realization,
-                'ref': self.ref,
-                'solver': self.solver,
-                'tol': self.tol,
-                'Z_2lvl': self.z_2lvl,
-            }
-        )
+        self._params = {
+            'bs_red': self.bs_red,
+            'enl_fac': self.enl_fac,
+            'fill_gaps': self.fill_gaps,
+            'fsample': self.fsample,
+            'gap_stgy': self.gap_stgy,
+            'lambda': self.lagmax,
+            'maxiter': self.maxiter,
+            'nside': self.pixel_pointing.nside,  # pyright: ignore[reportAttributeAccessIssue]
+            'ortho_alg': self.ortho_alg,
+            'output_dir': self.output_dir,
+            'precond': self.precond,
+            'ptcomm_flag': self.ptcomm_flag,
+            'realization': self.realization,
+            'ref': self.ref,
+            'solver': self.solver,
+            'tol': self.tol,
+            'Z_2lvl': self.z_2lvl,
+        }
 
         # Log the parameters that were used, creating the output directory if necessary
         outdir = Path(self.output_dir)
         if data.comm.world_rank == 0:
             outdir.mkdir(parents=True, exist_ok=True)
             with open(outdir / 'mappraiser_args_log.toml', 'w') as file:
-                tomlkit.dump(self.params, file, sort_keys=True)
+                tomlkit.dump(self._params, file, sort_keys=True)
 
     @function_timer
     def _stage(self, data: ToastData, detectors: list[str] | None) -> None:
@@ -329,7 +326,7 @@ class MapMaker(ToastOperator):
         """Make maps from buffered data"""
         lib.MLmap(
             self._comm,
-            self.params,
+            self._params,
             self._buffers.data_size_proc,
             self._buffers.local_blocksizes,
             self._buffers.detindxs,

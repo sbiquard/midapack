@@ -12,12 +12,6 @@ def setup_mapmaker_mappraiser(parser, operators):
         parser (ArgumentParser):  The parser to update.
         operators (list):  The list of operators to extend.
     """
-    parser.add_argument(
-        '--ref',
-        required=False,
-        default='run0',
-        help='Reference that is added to the name of the output maps.',
-    )
     operators.append(mappraiser_op.MapMaker(name='mappraiser', enabled=False))
 
 
@@ -35,8 +29,7 @@ def mapmaker_mappraiser(job, otherargs, runargs, data):
     job_ops = job.operators
 
     if job_ops.mappraiser.enabled:
-        job_ops.mappraiser.params['output_dir'] = otherargs.out_dir
-        job_ops.mappraiser.params['ref'] = otherargs.ref
+        job_ops.mappraiser.output_dir = otherargs.out_dir
         job_ops.mappraiser.pixel_pointing = job.pixels_final
         job_ops.mappraiser.stokes_weights = job.weights_final
         job_ops.mappraiser.apply(data)
