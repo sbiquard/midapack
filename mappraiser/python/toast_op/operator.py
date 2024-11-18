@@ -268,6 +268,12 @@ class MapMaker(ToastOperator):
         assert data_size == pixels.size // self._nnz
         assert data_size == weights.size // self._nnz
 
+        # The user may have requested to zero the signal and/or the noise
+        if self.zero_signal:
+            signal.fill(0)
+        if self.zero_noise:
+            noise.fill(0)
+
         self._buffers = MappraiserBuffers(
             local_blocksizes=block_sizes,
             data_size_proc=data_size_proc,
@@ -282,6 +288,25 @@ class MapMaker(ToastOperator):
             detindxs=detindxs,
         )
         self._buffers.enforce_contiguous()
+
+        if not self.plot_tod:
+            return
+
+        if data.comm.world_rank == 0:
+            # Debug: make some plots of the data before running mappraiser
+            import matplotlib.pyplot as plt
+
+            fig, axs = plt.subplots(1, 2, figsize=(12, 6))
+            axs[0].set_title('Signal')
+            axs[1].set_title('Noise')
+            acc = 0
+            for i, size in enumerate(block_sizes):
+                slc = slice(acc, acc + size)
+                axs[0].plot(signal[slc], alpha=0.5, color='k')
+                axs[1].plot(noise[slc], alpha=0.5, color='k')
+                acc += size
+            fig.tight_layout()
+            plt.savefig(Path(self.output_dir) / 'signal_and_noise.png')
 
     def _get_invntt(
         self,
