@@ -246,7 +246,7 @@ class MapMaker(ToastOperator):
 
         # Signal and noise
         signal = ctnr.get_signal()
-        noise = ctnr.get_noise()
+        noise = ctnr.get_noise() / np.sqrt(self.downscale)
 
         # Pointing and weights
         pixels = ctnr.get_pointing_indices(self.pixel_pointing)  # pyright: ignore[reportArgumentType]
