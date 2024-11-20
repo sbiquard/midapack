@@ -40,10 +40,10 @@ void x2map_pol(double *mapI, double *mapQ, double *mapU, double *Cond,
 void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
            int Z_2lvl, int pointing_commflag, double tol, int maxiter,
            int enl_fac, int ortho_alg, int bs_red, int nside, int gap_stgy,
-           bool do_gap_filling, uint64_t realization, void *data_size_proc,
-           int nb_blocks_loc, void *local_blocks_sizes, double sample_rate,
+           bool do_gap_filling, uint64_t realization, int *data_size_proc,
+           int nb_blocks_loc, int *local_blocks_sizes, double sample_rate,
            uint64_t *detindxs, uint64_t *obsindxs, uint64_t *telescopes,
-           int Nnz, void *pix, void *pixweights, void *signal, double *noise,
+           int Nnz, int *pix, double *pixweights, double *signal, double *noise,
            int lambda, double *inv_tt, double *tt) {
     int64_t M;             // Global number of rows
     int m, Nb_t_Intervals; // local number of rows of the pointing matrix A, nbr
@@ -76,22 +76,21 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
     // total length of the time domain signal
     M = 0;
     for (i = 0; i < size; i++) {
-        M += ((int *)data_size_proc)[i];
+        M += data_size_proc[i];
     }
 
     // compute distribution indexes over the processes
-    m = ((int *)data_size_proc)[rank];
+    m = data_size_proc[rank];
     gif = 0;
     for (i = 0; i < rank; i++) {
-        gif += ((int *)data_size_proc)[i];
+        gif += data_size_proc[i];
     }
 
     // Print information on data distribution
-    int Nb_t_Intervals_loc = nb_blocks_loc;
     MPI_Allreduce(&nb_blocks_loc, &Nb_t_Intervals, 1, MPI_INT, MPI_SUM, comm);
     if (rank == 0) {
         printf("[Data] global M = %ld (%d intervals)\n", M, Nb_t_Intervals);
-        printf("[Data] local  m = %d (%d intervals)\n", m, Nb_t_Intervals_loc);
+        printf("[Data] local  m = %d (%d intervals)\n", m, nb_blocks_loc);
         fflush(stdout);
     }
 
@@ -701,25 +700,26 @@ void x2map_pol(double *mapI, double *mapQ, double *mapU, double *Cond,
                int *hits, const double *x, const int *lstid, const double *cond,
                const int *lhits, int xsize, int nnz) {
     for (int i = 0; i < xsize; i++) {
+        int ipix = (int)(lstid[i] / nnz);
         if (nnz == 3) {
             // I, Q and U maps
             if (i % nnz == 0) {
-                mapI[(int)(lstid[i] / nnz)] = x[i];
-                hits[(int)(lstid[i] / nnz)] = lhits[(int)(i / nnz)];
-                Cond[(int)(lstid[i] / nnz)] = cond[(int)(i / nnz)];
+                mapI[ipix] = x[i];
+                hits[ipix] = lhits[(int)(i / nnz)];
+                Cond[ipix] = cond[(int)(i / nnz)];
             } else if (i % nnz == 1) {
-                mapQ[(int)(lstid[i] / nnz)] = x[i];
+                mapQ[ipix] = x[i];
             } else {
-                mapU[(int)(lstid[i] / nnz)] = x[i];
+                mapU[ipix] = x[i];
             }
         } else {
             // only Q and U maps are estimated
             if (i % nnz == 0) {
-                mapQ[(int)(lstid[i] / nnz)] = x[i];
-                hits[(int)(lstid[i] / nnz)] = lhits[(int)(i / nnz)];
-                Cond[(int)(lstid[i] / nnz)] = cond[(int)(i / nnz)];
+                mapQ[ipix] = x[i];
+                hits[ipix] = lhits[(int)(i / nnz)];
+                Cond[ipix] = cond[(int)(i / nnz)];
             } else {
-                mapU[(int)(lstid[i] / nnz)] = x[i];
+                mapU[ipix] = x[i];
             }
         }
     }
