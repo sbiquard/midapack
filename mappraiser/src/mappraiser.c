@@ -7,6 +7,7 @@
  * @update June 2020 by Aygul Jamal
  */
 
+#include <errno.h>
 #include <fitsio.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -26,6 +27,8 @@
 #ifdef WITH_ECG
 #include <mappraiser/ecg.h>
 #endif
+
+int remove_files(int n_files, const char *file_names[]);
 
 void x2map_pol(double *mapI, double *mapQ, double *mapU, double *rcond_map,
                int *hits_map, const double *x, const int *lstid,
@@ -418,66 +421,38 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
             x2map_pol(mapI, mapQ, mapU, rcond_map, hits_map, x, lstid, rcond,
                       lhits, map_size, nnz);
         }
-        puts("Checking output directory... old files will be overwritten");
+
+        // Define output file names
         char mapI_name[FILENAME_MAX];
         char mapQ_name[FILENAME_MAX];
         char mapU_name[FILENAME_MAX];
         char rcond_map_name[FILENAME_MAX];
         char hits_map_name[FILENAME_MAX];
-        char nest = 1;
-        char *cordsys = "C";
-        int ret, w = 1;
 
         if (nnz == 3) {
             sprintf(mapI_name, "%s/mapI_%s.fits", outpath, ref);
-            if (access(mapI_name, F_OK) != -1) {
-                ret = remove(mapI_name);
-                if (ret != 0) {
-                    printf("Error: unable to delete the file %s\n", mapI_name);
-                    w = 0;
-                }
-            }
         }
-
         sprintf(mapQ_name, "%s/mapQ_%s.fits", outpath, ref);
         sprintf(mapU_name, "%s/mapU_%s.fits", outpath, ref);
         sprintf(rcond_map_name, "%s/Cond_%s.fits", outpath, ref);
         sprintf(hits_map_name, "%s/Hits_%s.fits", outpath, ref);
 
-        if (access(mapQ_name, F_OK) != -1) {
-            ret = remove(mapQ_name);
-            if (ret != 0) {
-                printf("Error: unable to delete the file %s\n", mapQ_name);
-                w = 0;
-            }
-        }
+        const char *file_names[] = {
+            nnz == 3 ? mapI_name : NULL,
+            mapQ_name,
+            mapU_name,
+            rcond_map_name,
+            hits_map_name,
+        };
+        int n_files = sizeof(file_names) / sizeof(file_names[0]);
 
-        if (access(mapU_name, F_OK) != -1) {
-            ret = remove(mapU_name);
-            if (ret != 0) {
-                printf("Error: unable to delete the file %s\n", mapU_name);
-                w = 0;
-            }
-        }
+        // Remove old files before writing new ones
+        int remove_info = remove_files(n_files, file_names);
 
-        if (access(rcond_map_name, F_OK) != -1) {
-            ret = remove(rcond_map_name);
-            if (ret != 0) {
-                printf("Error: unable to delete the file %s\n", rcond_map_name);
-                w = 0;
-            }
-        }
-
-        if (access(hits_map_name, F_OK) != -1) {
-            ret = remove(hits_map_name);
-            if (ret != 0) {
-                printf("Error: unable to delete the file %s\n", hits_map_name);
-                w = 0;
-            }
-        }
-
-        if (w == 1) {
+        if (remove_info == 0) {
             printf("Writing HEALPix maps FITS files to %s...\n", outpath);
+            char nest = 1;
+            char *cordsys = "C";
             if (nnz == 3) {
                 write_map(mapI, TDOUBLE, nside, mapI_name, nest, cordsys);
             }
@@ -514,6 +489,24 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
     FREE(lstid);
 
     // MPI_Finalize();
+}
+
+int remove_files(int n_files, const char *file_names[]) {
+    puts("Checking output directory... old files will be overwritten");
+    for (int i = 0; i < n_files; ++i) {
+        if (file_names[i] == NULL)
+            continue;
+        if (access(file_names[i], F_OK) == -1)
+            // file does not exist
+            continue;
+        int ret = remove(file_names[i]);
+        if (ret != 0) {
+            fprintf(stderr, "Error: unable to delete the file %s: %s\n",
+                    file_names[i], strerror(errno));
+            return 1;
+        }
+    }
+    return 0;
 }
 
 void x2map_pol(double *mapI, double *mapQ, double *mapU, double *rcond_map,
