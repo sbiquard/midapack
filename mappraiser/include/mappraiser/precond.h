@@ -30,7 +30,7 @@ typedef struct precond_t {
 } Precond;
 
 // Preconditioner constructor (Block Jacobi)
-Precond *newPrecondBJ(Mat *A, Tpltz *Nm1, double *cond, int *lhits,
+Precond *newPrecondBJ(Mat *A, Tpltz *Nm1, double *rcond, int *lhits,
                       GapStrategy gs, Gap *Gaps, int64_t gif,
                       int *local_blocks_sizes);
 
