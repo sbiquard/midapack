@@ -1,6 +1,7 @@
 #ifndef MAPPRAISER_WEIGHT_H
 #define MAPPRAISER_WEIGHT_H
 
+#include <mappraiser/mapping.h>
 #include <midapack.h>
 
 #ifdef __cplusplus
@@ -19,6 +20,15 @@ typedef struct {
     Gap *G;     // Timestream gaps
     WeightStgy stgy;
 } WeightMatrix;
+
+// Constructor of WeightStgy given a GapStrategy
+WeightStgy createFromGapStrategy(Gap *Gaps, Mat *A, Tpltz *Nm1, Tpltz *N,
+                                 GapStrategy gs, double *b, const double *noise,
+                                 bool do_gap_filling, uint64_t realization,
+                                 const uint64_t *detindxs,
+                                 const uint64_t *obsindxs,
+                                 const uint64_t *telescopes,
+                                 double sample_rate);
 
 // Simple constructor
 WeightMatrix createWeightMatrix(Tpltz *Nm1, Tpltz *N, Gap *G, WeightStgy stgy);
