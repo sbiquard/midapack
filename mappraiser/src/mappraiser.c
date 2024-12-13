@@ -323,9 +323,6 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
     FREE(Gaps.id0gap);
     FREE(Gaps.lgap);
 
-    // free memory allocated for preconditioner
-    PrecondFree(P);
-
     // ____________________________________________________________
     // Write output to fits files
 
@@ -341,6 +338,7 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
 
     int map_size = get_valid_map_size(&A);
     int extra = get_actual_map_size(&A) - map_size;
+    double *bj_map = P->BJ_inv.values;
 
     if (extra > 0) {
 #ifdef DEBUG
@@ -360,9 +358,11 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
         memmove(x, x + extra, sizeof *x * map_size);
         memmove(lhits, lhits + extra / nnz, sizeof *lhits * map_size / nnz);
         memmove(rcond, rcond + extra / nnz, sizeof *rcond * map_size / nnz);
+        memmove(bj_map, bj_map + nnz * extra, sizeof *bj_map * map_size * nnz);
         x = SAFEREALLOC(x, sizeof *x * map_size);
         lhits = SAFEREALLOC(lhits, sizeof *lhits * map_size / nnz);
         rcond = SAFEREALLOC(rcond, sizeof *rcond * map_size / nnz);
+        bj_map = SAFEREALLOC(bj_map, sizeof *bj_map * map_size * nnz);
     }
 
     // get maps from all processes and combine them
@@ -378,6 +378,7 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
         MPI_Send(x, map_size, MPI_DOUBLE, 0, 2, comm);
         MPI_Send(rcond, map_size / nnz, MPI_DOUBLE, 0, 3, comm);
         MPI_Send(lhits, map_size / nnz, MPI_INT, 0, 4, comm);
+        MPI_Send(bj_map, map_size * nnz, MPI_DOUBLE, 0, 5, comm);
     }
 
     if (rank == 0) {
@@ -394,8 +395,10 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
                 if (oldsize != map_size) {
                     lstid = SAFEREALLOC(lstid, sizeof *lstid * map_size);
                     x = SAFEREALLOC(x, sizeof *x * map_size);
-                    rcond = SAFEREALLOC(rcond, sizeof *rcond * map_size);
-                    lhits = SAFEREALLOC(lhits, sizeof *lhits * map_size);
+                    rcond = SAFEREALLOC(rcond, sizeof *rcond * map_size / nnz);
+                    lhits = SAFEREALLOC(lhits, sizeof *lhits * map_size / nnz);
+                    bj_map =
+                        SAFEREALLOC(bj_map, sizeof *bj_map * map_size * nnz);
                 }
                 MPI_Recv(lstid, map_size, MPI_INT, proc, 1, comm, &status);
                 MPI_Recv(x, map_size, MPI_DOUBLE, proc, 2, comm, &status);
@@ -403,8 +406,10 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
                          &status);
                 MPI_Recv(lhits, map_size / nnz, MPI_INT, proc, 4, comm,
                          &status);
+                MPI_Recv(bj_map, map_size * nnz, MPI_DOUBLE, proc, 5, comm,
+                         &status);
             }
-            populateMappraiserOutputs(&outputs, x, lstid, rcond, lhits,
+            populateMappraiserOutputs(&outputs, x, lstid, rcond, lhits, bj_map,
                                       map_size, nnz);
         }
 
@@ -439,5 +444,5 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
     A.values = NULL;
     FREE(lstid);
 
-    // MPI_Finalize();
+    PrecondFree(P);
 }

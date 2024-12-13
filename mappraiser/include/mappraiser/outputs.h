@@ -10,8 +10,17 @@ typedef struct {
     double *mapQ;
     double *mapU;
 
+    // inverse preconditioner (symmetric nnzxnnz matrix for each pixel)
+    double *precII;
+    double *precIQ;
+    double *precIU;
+    double *precQQ;
+    double *precQU;
+    double *precUU;
+
     // files
-    int count;
+    int max_count;
+    int real_count;
     char **files;
 } MappraiserOutputs;
 
@@ -22,7 +31,8 @@ void freeMappraiserOutputs(MappraiserOutputs *o);
 
 void populateMappraiserOutputs(MappraiserOutputs *o, const double *x,
                                const int *lstid, const double *rcond,
-                               const int *lhits, int xsize, int nnz);
+                               const int *lhits, const double *bj_map,
+                               int xsize, int nnz);
 
 int clearFiles(MappraiserOutputs *o);
 
