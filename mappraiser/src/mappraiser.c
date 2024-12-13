@@ -7,18 +7,15 @@
  * @update June 2020 by Aygul Jamal
  */
 
-#include <errno.h>
-#include <fitsio.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 
 #include <mappraiser/create_toeplitz.h>
 #include <mappraiser/gap_filling.h>
-#include <mappraiser/iofiles.h>
 #include <mappraiser/map.h>
 #include <mappraiser/mapping.h>
+#include <mappraiser/outputs.h>
 #include <mappraiser/pcg_true.h>
 #include <mappraiser/precond.h>
 #include <mappraiser/weight.h>
@@ -28,10 +25,7 @@
 #include <mappraiser/ecg.h>
 #endif
 
-int remove_files(int n_files, const char *file_names[]);
-
-void x2map_pol(double *mapI, double *mapQ, double *mapU, double *rcond_map,
-               int *hits_map, const double *x, const int *lstid,
+void x2map_pol(MappraiserOutputs *o, const double *x, const int *lstid,
                const double *rcond, const int *lhits, int xsize, int nnz);
 
 void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
@@ -390,17 +384,10 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
     }
 
     if (rank == 0) {
-        int npix = 12 * nside * nside;
         int oldsize;
 
-        double *mapI = NULL;
-        if (nnz == 3) {
-            mapI = SAFECALLOC(npix, sizeof *mapI);
-        }
-        double *mapQ = SAFECALLOC(npix, sizeof *mapQ);
-        double *mapU = SAFECALLOC(npix, sizeof *mapU);
-        int *hits_map = SAFECALLOC(npix, sizeof *hits_map);
-        double *rcond_map = SAFECALLOC(npix, sizeof *rcond_map);
+        MappraiserOutputs outputs;
+        initMappraiserOutputs(&outputs, nside, nnz, outpath, ref);
 
         for (int i = 0; i < size; i++) {
             if (i != 0) {
@@ -418,58 +405,22 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
                          &status);
                 MPI_Recv(lhits, map_size / nnz, MPI_INT, i, 4, comm, &status);
             }
-            x2map_pol(mapI, mapQ, mapU, rcond_map, hits_map, x, lstid, rcond,
-                      lhits, map_size, nnz);
+            x2map_pol(&outputs, x, lstid, rcond, lhits, map_size, nnz);
         }
-
-        // Define output file names
-        char mapI_name[FILENAME_MAX];
-        char mapQ_name[FILENAME_MAX];
-        char mapU_name[FILENAME_MAX];
-        char rcond_map_name[FILENAME_MAX];
-        char hits_map_name[FILENAME_MAX];
-
-        if (nnz == 3) {
-            sprintf(mapI_name, "%s/mapI_%s.fits", outpath, ref);
-        }
-        sprintf(mapQ_name, "%s/mapQ_%s.fits", outpath, ref);
-        sprintf(mapU_name, "%s/mapU_%s.fits", outpath, ref);
-        sprintf(rcond_map_name, "%s/Cond_%s.fits", outpath, ref);
-        sprintf(hits_map_name, "%s/Hits_%s.fits", outpath, ref);
-
-        const char *file_names[] = {
-            nnz == 3 ? mapI_name : NULL,
-            mapQ_name,
-            mapU_name,
-            rcond_map_name,
-            hits_map_name,
-        };
-        int n_files = sizeof(file_names) / sizeof(file_names[0]);
 
         // Remove old files before writing new ones
-        int remove_info = remove_files(n_files, file_names);
+        puts("Checking output directory... old files will be overwritten");
+        int remove_info = clearFiles(&outputs);
 
         if (remove_info == 0) {
             printf("Writing HEALPix maps FITS files to %s...\n", outpath);
-            char nest = 1;
-            char *cordsys = "C";
-            if (nnz == 3) {
-                write_map(mapI, TDOUBLE, nside, mapI_name, nest, cordsys);
-            }
-            write_map(mapQ, TDOUBLE, nside, mapQ_name, nest, cordsys);
-            write_map(mapU, TDOUBLE, nside, mapU_name, nest, cordsys);
-            write_map(rcond_map, TDOUBLE, nside, rcond_map_name, nest, cordsys);
-            write_map(hits_map, TINT, nside, hits_map_name, nest, cordsys);
+            writeFiles(&outputs);
         } else {
             fprintf(stderr, "IO Error: Could not overwrite old files, map "
                             "results will not be stored ;(\n");
         }
 
-        FREE(mapI);
-        FREE(mapQ);
-        FREE(mapU);
-        FREE(rcond_map);
-        FREE(hits_map);
+        freeMappraiserOutputs(&outputs);
     }
 
     elapsed = MPI_Wtime() - st;
@@ -491,48 +442,29 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
     // MPI_Finalize();
 }
 
-int remove_files(int n_files, const char *file_names[]) {
-    puts("Checking output directory... old files will be overwritten");
-    for (int i = 0; i < n_files; ++i) {
-        if (file_names[i] == NULL)
-            continue;
-        if (access(file_names[i], F_OK) == -1)
-            // file does not exist
-            continue;
-        int ret = remove(file_names[i]);
-        if (ret != 0) {
-            fprintf(stderr, "Error: unable to delete the file %s: %s\n",
-                    file_names[i], strerror(errno));
-            return 1;
-        }
-    }
-    return 0;
-}
-
-void x2map_pol(double *mapI, double *mapQ, double *mapU, double *rcond_map,
-               int *hits_map, const double *x, const int *lstid,
+void x2map_pol(MappraiserOutputs *o, const double *x, const int *lstid,
                const double *rcond, const int *lhits, int xsize, int nnz) {
     for (int i = 0; i < xsize; i++) {
         int ipix = lstid[i] / nnz;
         if (nnz == 3) {
             // I, Q and U maps
             if (i % nnz == 0) {
-                mapI[ipix] = x[i];
-                hits_map[ipix] = lhits[i / nnz];
-                rcond_map[ipix] = rcond[i / nnz];
+                o->mapI[ipix] = x[i];
+                o->hits[ipix] = lhits[i / nnz];
+                o->rcond[ipix] = rcond[i / nnz];
             } else if (i % nnz == 1) {
-                mapQ[ipix] = x[i];
+                o->mapQ[ipix] = x[i];
             } else {
-                mapU[ipix] = x[i];
+                o->mapU[ipix] = x[i];
             }
         } else {
             // only Q and U maps are estimated
             if (i % nnz == 0) {
-                mapQ[ipix] = x[i];
-                hits_map[ipix] = lhits[i / nnz];
-                rcond_map[ipix] = rcond[i / nnz];
+                o->mapQ[ipix] = x[i];
+                o->hits[ipix] = lhits[i / nnz];
+                o->rcond[ipix] = rcond[i / nnz];
             } else {
-                mapU[ipix] = x[i];
+                o->mapU[ipix] = x[i];
             }
         }
     }
