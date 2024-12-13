@@ -48,24 +48,24 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
     double *x, *rcond = NULL; // pixel domain vectors
     int *lhits = NULL;
 
-    int rank, size;
+    int rank, world_size;
     MPI_Status status;
 
     MPI_Comm_rank(comm, &rank);
-    MPI_Comm_size(comm, &size);
+    MPI_Comm_size(comm, &world_size);
     if (rank == 0) {
         printf("\n############# MAPPRAISER : MidAPack PaRAllel Iterative Sky "
                "EstimatoR vDev, May 2019 "
                "################\n");
         printf("Last compiled on %s at %s\n", __DATE__, __TIME__);
-        printf("[MPI info] rank = %d, size = %d\n", rank, size);
+        printf("[MPI info] rank = %d, size = %d\n", rank, world_size);
         puts("##### Initialization ####################");
         fflush(stdout);
     }
 
     // total length of the time domain signal
     M = 0;
-    for (int i = 0; i < size; i++) {
+    for (int i = 0; i < world_size; i++) {
         M += data_size_proc[i];
     }
 
@@ -249,7 +249,7 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
         st = MPI_Wtime();
 
         P->ptype = precond;
-        P->Zn = Z_2lvl == 0 ? size : Z_2lvl;
+        P->Zn = Z_2lvl == 0 ? world_size : Z_2lvl;
         buildPrecond2lvl(P, &A, &W, x, signal);
 
         MPI_Barrier(comm);
@@ -389,21 +389,23 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
         MappraiserOutputs outputs;
         initMappraiserOutputs(&outputs, nside, nnz, outpath, ref);
 
-        for (int i = 0; i < size; i++) {
-            if (i != 0) {
+        for (int proc = 0; proc < world_size; proc++) {
+            if (proc != 0) {
+                // Receive data from other processes
                 oldsize = map_size;
-                MPI_Recv(&map_size, 1, MPI_INT, i, 0, comm, &status);
+                MPI_Recv(&map_size, 1, MPI_INT, proc, 0, comm, &status);
                 if (oldsize != map_size) {
                     lstid = SAFEREALLOC(lstid, sizeof *lstid * map_size);
                     x = SAFEREALLOC(x, sizeof *x * map_size);
                     rcond = SAFEREALLOC(rcond, sizeof *rcond * map_size);
                     lhits = SAFEREALLOC(lhits, sizeof *lhits * map_size);
                 }
-                MPI_Recv(lstid, map_size, MPI_INT, i, 1, comm, &status);
-                MPI_Recv(x, map_size, MPI_DOUBLE, i, 2, comm, &status);
-                MPI_Recv(rcond, map_size / nnz, MPI_DOUBLE, i, 3, comm,
+                MPI_Recv(lstid, map_size, MPI_INT, proc, 1, comm, &status);
+                MPI_Recv(x, map_size, MPI_DOUBLE, proc, 2, comm, &status);
+                MPI_Recv(rcond, map_size / nnz, MPI_DOUBLE, proc, 3, comm,
                          &status);
-                MPI_Recv(lhits, map_size / nnz, MPI_INT, i, 4, comm, &status);
+                MPI_Recv(lhits, map_size / nnz, MPI_INT, proc, 4, comm,
+                         &status);
             }
             x2map_pol(&outputs, x, lstid, rcond, lhits, map_size, nnz);
         }
