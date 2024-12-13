@@ -20,6 +20,10 @@ void initMappraiserOutputs(MappraiserOutputs *o, int size, int nnz,
 
 void freeMappraiserOutputs(MappraiserOutputs *o);
 
+void populateMappraiserOutputs(MappraiserOutputs *o, const double *x,
+                               const int *lstid, const double *rcond,
+                               const int *lhits, int xsize, int nnz);
+
 int clearFiles(MappraiserOutputs *o);
 
 void writeFiles(MappraiserOutputs *o);

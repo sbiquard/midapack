@@ -25,9 +25,6 @@
 #include <mappraiser/ecg.h>
 #endif
 
-void x2map_pol(MappraiserOutputs *o, const double *x, const int *lstid,
-               const double *rcond, const int *lhits, int xsize, int nnz);
-
 void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
            int Z_2lvl, int pointing_commflag, double tol, int maxiter,
            int enl_fac, int ortho_alg, int bs_red, int nside, int gap_stgy,
@@ -407,7 +404,8 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
                 MPI_Recv(lhits, map_size / nnz, MPI_INT, proc, 4, comm,
                          &status);
             }
-            x2map_pol(&outputs, x, lstid, rcond, lhits, map_size, nnz);
+            populateMappraiserOutputs(&outputs, x, lstid, rcond, lhits,
+                                      map_size, nnz);
         }
 
         // Remove old files before writing new ones
@@ -442,32 +440,4 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
     FREE(lstid);
 
     // MPI_Finalize();
-}
-
-void x2map_pol(MappraiserOutputs *o, const double *x, const int *lstid,
-               const double *rcond, const int *lhits, int xsize, int nnz) {
-    for (int i = 0; i < xsize; i++) {
-        int ipix = lstid[i] / nnz;
-        if (nnz == 3) {
-            // I, Q and U maps
-            if (i % nnz == 0) {
-                o->mapI[ipix] = x[i];
-                o->hits[ipix] = lhits[i / nnz];
-                o->rcond[ipix] = rcond[i / nnz];
-            } else if (i % nnz == 1) {
-                o->mapQ[ipix] = x[i];
-            } else {
-                o->mapU[ipix] = x[i];
-            }
-        } else {
-            // only Q and U maps are estimated
-            if (i % nnz == 0) {
-                o->mapQ[ipix] = x[i];
-                o->hits[ipix] = lhits[i / nnz];
-                o->rcond[ipix] = rcond[i / nnz];
-            } else {
-                o->mapU[ipix] = x[i];
-            }
-        }
-    }
 }
