@@ -359,12 +359,12 @@ void invert_block(double *x, int nb, int lda, int *ipiv) {
  * @param Nm1 inverse noise covariance matrix
  * @param vpixBlock buffer of size nnz * nnz * #pixels (preconditioner blocks)
  * @param vpixBlock_inv buffer of the same size as vpixBlock (inverse blocks)
- * @param cond buffer of the size of the map (for condition numbers)
+ * @param rcond buffer of the size of the map (for inverse condition numbers)
  * @param lhits buffer of the size of the map (for hit counts)
  * @return int: amount of degenerate pixels found
  */
 int precondblockjacobilike(Mat *A, Tpltz *Nm1, double *vpixBlock,
-                           double *vpixBlock_inv, double *cond, int *lhits) {
+                           double *vpixBlock_inv, double *rcond, int *lhits) {
     // MPI info
     int rank, size;
     MPI_Comm_rank(A->comm, &rank);
@@ -445,16 +445,16 @@ int precondblockjacobilike(Mat *A, Tpltz *Nm1, double *vpixBlock,
         memcpy(x, vpixBlock + innz2, nb * nb * sizeof(double));
 
         // reciprocal condition number of the block
-        double rcond = compute_rcond_block(x, nb, lda, ipiv);
+        double rcond_block = compute_rcond_block(x, nb, lda, ipiv);
 
-        if (rcond > 1e-1) {
+        if (rcond_block > 1e-1) {
             // The pixel is well enough observed, inverse the preconditioner
             // block. We use LAPACK's dgetri routine which inverts a matrix
             // given its LU decomposition (which we already have because it was
             // used to compute rcond!)
 
             // store rcond value
-            cond[ipix] = rcond;
+            rcond[ipix] = rcond_block;
 
             // invert the block using the previous LU decomposition
             invert_block(x, nb, lda, ipiv);
@@ -469,13 +469,13 @@ int precondblockjacobilike(Mat *A, Tpltz *Nm1, double *vpixBlock,
             point_pixel_to_trash(A, off + ipix + nbr_degenerate);
             nbr_degenerate++;
 
-            // Remove degenerate pixel from vpixBlock, lhits, and cond
+            // Remove degenerate pixel from vpixBlock, lhits, and rcond
             memmove(vpixBlock + innz2, vpixBlock + innz2 + nnz2,
                     sizeof *vpixBlock * (n * nnz - nnz2 - innz2));
             memmove(lhits + ipix, lhits + ipix + 1,
                     sizeof *lhits * (n / nnz - 1 - ipix));
-            memmove(cond + ipix, cond + ipix + 1,
-                    sizeof *cond * (n / nnz - 1 - ipix));
+            memmove(rcond + ipix, rcond + ipix + 1,
+                    sizeof *rcond * (n / nnz - 1 - ipix));
 
             // Shrink effective size of vpixBlock
             n -= nnz;
@@ -492,7 +492,7 @@ int precondblockjacobilike(Mat *A, Tpltz *Nm1, double *vpixBlock,
 
 // Complementary BJ routine for extra pixels
 int precond_bj_like_extra(const Mat *A, const Tpltz *Nm1, double *vpixBlock,
-                          double *vpixBlock_inv, double *cond, int *lhits) {
+                          double *vpixBlock_inv, double *rcond, int *lhits) {
     // MPI info
     int rank, size;
     MPI_Comm_rank(A->comm, &rank);
@@ -563,7 +563,7 @@ int precond_bj_like_extra(const Mat *A, const Tpltz *Nm1, double *vpixBlock,
 #endif
 
         // store rcond value
-        *(*cond + ipix) = rcond;
+        *(*rcond + ipix) = rcond;
 
         // invert the block using the previous LU decomposition
         invert_block(x, nb, lda, ipiv);
@@ -585,7 +585,7 @@ int precond_bj_like_extra(const Mat *A, const Tpltz *Nm1, double *vpixBlock,
     return n_ill;
 }
 
-void precondjacobilike(Mat A, Tpltz Nm1, int *lhits, double *cond,
+void precondjacobilike(Mat A, Tpltz Nm1, int *lhits, double *rcond,
                        double *vpixDiag) {
     // number of local pixels
     int n = A.lcount;
@@ -600,7 +600,7 @@ void precondjacobilike(Mat A, Tpltz Nm1, int *lhits, double *cond,
     for (int i = 0; i < n; i++) {
         if (i % 3 == 0) {
             lhits[(int)i / 3] = (int)vpixDiag[i];
-            cond[(int)i / 3] = vpixDiag[i + 1] + vpixDiag[i + 2];
+            rcond[(int)i / 3] = vpixDiag[i + 1] + vpixDiag[i + 2];
         }
         vpixDiag[i] = 1. / vpixDiag[i];
     }
@@ -1182,7 +1182,7 @@ void Lanczos_eig(const Mat *A, const WeightMatrix *W, const double *x,
     *out_Ritz_vectors_AZ = Ritz_vectors_AZ;
 }
 
-void build_BJinv(Mat *A, Tpltz *Nm1, Mat *BJ_inv, double *cond, int *lhits,
+void build_BJinv(Mat *A, Tpltz *Nm1, Mat *BJ_inv, double *rcond, int *lhits,
                  GapStrategy gs, Gap *Gaps, int64_t gif,
                  int *local_blocks_sizes) {
     // MPI info
@@ -1201,7 +1201,7 @@ void build_BJinv(Mat *A, Tpltz *Nm1, Mat *BJ_inv, double *cond, int *lhits,
     double *vpixBlock_inv = SAFEMALLOC(sizeof *vpixBlock_inv * n * nnz);
 
     int nd =
-        precondblockjacobilike(A, Nm1, vpixBlock, vpixBlock_inv, cond, lhits);
+        precondblockjacobilike(A, Nm1, vpixBlock, vpixBlock_inv, rcond, lhits);
 
     // did any of the processes encounter a degenerate pixel
     MPI_Allreduce(MPI_IN_PLACE, &nd, 1, MPI_INT, MPI_MAX, A->comm);
@@ -1254,7 +1254,7 @@ void build_BJinv(Mat *A, Tpltz *Nm1, Mat *BJ_inv, double *cond, int *lhits,
         vpixBlock_inv =
             SAFEREALLOC(vpixBlock_inv, sizeof *vpixBlock_inv * n * nnz);
         lhits = SAFEREALLOC(lhits, sizeof *lhits * n / nnz);
-        cond = SAFEREALLOC(cond, sizeof *cond * n / nnz);
+        rcond = SAFEREALLOC(rcond, sizeof *rcond * n / nnz);
     }
 
 #if 0
@@ -1281,10 +1281,10 @@ void build_BJinv(Mat *A, Tpltz *Nm1, Mat *BJ_inv, double *cond, int *lhits,
         }
 
 #if 1
-        precond_bj_like_extra(A, Nm1, vpixBlock, vpixBlock_inv, cond, lhits);
+        precond_bj_like_extra(A, Nm1, vpixBlock, vpixBlock_inv, rcond, lhits);
 #else
         int n_ill = precond_bj_like_extra(A, Nm1, vpixBlock, vpixBlock_inv,
-                                          cond, lhits);
+                                          rcond, lhits);
         if (n_ill > 0) {
             // some extra pixels are ill-conditioned
             // we can not estimate them
@@ -1355,14 +1355,14 @@ void build_BJinv(Mat *A, Tpltz *Nm1, Mat *BJ_inv, double *cond, int *lhits,
 }
 
 // General routine for constructing a preconditioner
-Precond *newPrecondBJ(Mat *A, Tpltz *Nm1, double *cond, int *lhits,
+Precond *newPrecondBJ(Mat *A, Tpltz *Nm1, double *rcond, int *lhits,
                       GapStrategy gs, Gap *Gaps, int64_t gif,
                       int *local_blocks_sizes) {
     // Allocate memory for the preconditioner
     Precond *p = SAFECALLOC(1, sizeof *p);
 
     // Compute BJ preconditioner
-    build_BJinv(A, Nm1, &(p->BJ_inv), cond, lhits, gs, Gaps, gif,
+    build_BJinv(A, Nm1, &(p->BJ_inv), rcond, lhits, gs, Gaps, gif,
                 local_blocks_sizes);
 
     if (A->flag_ignore_extra) {

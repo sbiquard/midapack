@@ -14,6 +14,7 @@ target_sources(mappraiser PRIVATE
         "iofiles.c"
         "mapping.c"
         "mappraiser.c"
+        "outputs.c"
         "weight.c"
         "pcg_true.c"
         "precond.c"

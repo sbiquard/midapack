@@ -7,17 +7,15 @@
  * @update June 2020 by Aygul Jamal
  */
 
-#include <fitsio.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 
 #include <mappraiser/create_toeplitz.h>
 #include <mappraiser/gap_filling.h>
-#include <mappraiser/iofiles.h>
 #include <mappraiser/map.h>
 #include <mappraiser/mapping.h>
+#include <mappraiser/outputs.h>
 #include <mappraiser/pcg_true.h>
 #include <mappraiser/precond.h>
 #include <mappraiser/weight.h>
@@ -27,69 +25,58 @@
 #include <mappraiser/ecg.h>
 #endif
 
-WeightStgy handle_gaps(Gap *Gaps, Mat *A, Tpltz *Nm1, Tpltz *N, GapStrategy gs,
-                       double *b, const double *noise, bool do_gap_filling,
-                       uint64_t realization, const uint64_t *detindxs,
-                       const uint64_t *obsindxs, const uint64_t *telescopes,
-                       double sample_rate);
-
-void x2map_pol(double *mapI, double *mapQ, double *mapU, double *Cond,
-               int *hits, const double *x, const int *lstid, const double *cond,
-               const int *lhits, int xsize, int nnz);
-
 void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
            int Z_2lvl, int pointing_commflag, double tol, int maxiter,
            int enl_fac, int ortho_alg, int bs_red, int nside, int gap_stgy,
            bool do_gap_filling, uint64_t realization, int *data_size_proc,
            int nb_blocks_loc, int *local_blocks_sizes, double sample_rate,
            uint64_t *detindxs, uint64_t *obsindxs, uint64_t *telescopes,
-           int Nnz, int *pix, double *pixweights, double *signal, double *noise,
+           int nnz, int *pix, double *pixweights, double *signal, double *noise,
            int lambda, double *inv_tt, double *tt) {
-    int64_t M;             // Global number of rows
-    int m, Nb_t_Intervals; // local number of rows of the pointing matrix A, nbr
-                           // of stationary intervals
-    int64_t gif;           // global indice for the first local line
-    int i;
-    Mat A;                   // pointing matrix structure
-    int nbr_valid_pixels;    // nbr of valid pixel indices
-    int nbr_extra_pixels;    // nbr of extra pixel indices
-    Gap Gaps;                // timestream gaps structure
-    double *x, *cond = NULL; // pixel domain vectors
+    int64_t M;        // global number of rows of the pointing matrix
+    int64_t gif;      // global index for the first local line
+    int m;            // local number of rows of the pointing matrix
+    int n_blocks_tot; // global number of stationary intervals (data blocks)
+
+    Mat A;                    // pointing matrix structure
+    int nbr_valid_pixels;     // nbr of valid pixel indices
+    int nbr_extra_pixels;     // nbr of extra pixel indices
+    Gap Gaps;                 // timestream gaps structure
+    double *x, *rcond = NULL; // pixel domain vectors
     int *lhits = NULL;
-    int rank, size;
+
+    int rank, world_size;
     MPI_Status status;
 
-    // mkl_set_num_threads(1); // Circumvent an MKL bug
-
     MPI_Comm_rank(comm, &rank);
-    MPI_Comm_size(comm, &size);
+    MPI_Comm_size(comm, &world_size);
     if (rank == 0) {
         printf("\n############# MAPPRAISER : MidAPack PaRAllel Iterative Sky "
                "EstimatoR vDev, May 2019 "
                "################\n");
         printf("Last compiled on %s at %s\n", __DATE__, __TIME__);
-        printf("[MPI info] rank = %d, size = %d\n", rank, size);
+        printf("[MPI info] rank = %d, size = %d\n", rank, world_size);
         puts("##### Initialization ####################");
         fflush(stdout);
     }
 
     // total length of the time domain signal
     M = 0;
-    for (i = 0; i < size; i++) {
+    for (int i = 0; i < world_size; i++) {
         M += data_size_proc[i];
     }
 
     // compute distribution indexes over the processes
     m = data_size_proc[rank];
     gif = 0;
-    for (i = 0; i < rank; i++) {
+    for (int i = 0; i < rank; i++) {
         gif += data_size_proc[i];
     }
 
     // Print information on data distribution
-    MPI_Allreduce(&nb_blocks_loc, &Nb_t_Intervals, 1, MPI_INT, MPI_SUM, comm);
+    MPI_Allreduce(&nb_blocks_loc, &n_blocks_tot, 1, MPI_INT, MPI_SUM, comm);
     if (rank == 0) {
-        printf("[Data] global M = %ld (%d intervals)\n", M, Nb_t_Intervals);
+        printf("[Data] global M = %ld (%d intervals)\n", M, n_blocks_tot);
         printf("[Data] local  m = %d (%d intervals)\n", m, nb_blocks_loc);
         fflush(stdout);
     }
@@ -100,7 +87,7 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
     A.flag_ignore_extra = !(gs == MARG_LOCAL_SCAN || gs == MARG_PROC);
 
     // Create extra pixels according to the chosen strategy
-    create_extra_pix(pix, pixweights, Nnz, nb_blocks_loc, local_blocks_sizes,
+    create_extra_pix(pix, pixweights, nnz, nb_blocks_loc, local_blocks_sizes,
                      gs);
 
     if (rank == 0) {
@@ -115,7 +102,7 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
     MPI_Barrier(comm);
     double st = MPI_Wtime();
 
-    MatInit(&A, m, Nnz, pix, pixweights, pointing_commflag, comm);
+    MatInit(&A, m, nnz, pix, pixweights, pointing_commflag, comm);
     Gaps.ngap = build_pixel_to_time_domain_mapping(&A);
 
     MPI_Barrier(comm);
@@ -139,14 +126,14 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
     // Size of map that will be estimated by the solver
     int solver_map_size = get_actual_map_size(&A);
 
-    cond = SAFEMALLOC(sizeof *cond * solver_map_size / A.nnz);
+    rcond = SAFEMALLOC(sizeof *rcond * solver_map_size / A.nnz);
     lhits = SAFEMALLOC(sizeof *lhits * solver_map_size / A.nnz);
 
     // ____________________________________________________________
     // Create piecewise Toeplitz matrix
 
     // specifics parameters:
-    int nb_blocks_tot = Nb_t_Intervals;
+    int nb_blocks_tot = n_blocks_tot;
     int lambda_block_avg = lambda;
 
     // flags for Toeplitz product strategy
@@ -204,8 +191,8 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
     st = MPI_Wtime();
 
     // first build the BJ preconditioner
-    Precond *P =
-        newPrecondBJ(&A, &Nm1, cond, lhits, gs, &Gaps, gif, local_blocks_sizes);
+    Precond *P = newPrecondBJ(&A, &Nm1, rcond, lhits, gs, &Gaps, gif,
+                              local_blocks_sizes);
 
     // Allocate memory for the map with the right number of pixels
     x = SAFECALLOC(P->n, sizeof *x);
@@ -239,9 +226,9 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
         fflush(stdout);
     }
 
-    WeightStgy ws =
-        handle_gaps(&Gaps, &A, &Nm1, &N, gs, signal, noise, do_gap_filling,
-                    realization, detindxs, obsindxs, telescopes, sample_rate);
+    WeightStgy ws = createFromGapStrategy(
+        &Gaps, &A, &Nm1, &N, gs, signal, noise, do_gap_filling, realization,
+        detindxs, obsindxs, telescopes, sample_rate);
 
     // final weighting operator
     WeightMatrix W = createWeightMatrix(&Nm1, &N, &Gaps, ws);
@@ -259,7 +246,7 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
         st = MPI_Wtime();
 
         P->ptype = precond;
-        P->Zn = Z_2lvl == 0 ? size : Z_2lvl;
+        P->Zn = Z_2lvl == 0 ? world_size : Z_2lvl;
         buildPrecond2lvl(P, &A, &W, x, signal);
 
         MPI_Barrier(comm);
@@ -336,9 +323,6 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
     FREE(Gaps.id0gap);
     FREE(Gaps.lgap);
 
-    // free memory allocated for preconditioner
-    PrecondFree(P);
-
     // ____________________________________________________________
     // Write output to fits files
 
@@ -354,14 +338,15 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
 
     int map_size = get_valid_map_size(&A);
     int extra = get_actual_map_size(&A) - map_size;
+    double *bj_map = P->BJ_inv.values;
 
     if (extra > 0) {
 #ifdef DEBUG
         double *extra_map = SAFEMALLOC(sizeof *extra_map * extra);
         memcpy(extra_map, x, extra * sizeof(double));
         if (rank == 0) {
-            printf("extra map with %d pixels (T only)\n {", extra / Nnz);
-            for (int j = 0; j < extra; j += Nnz) {
+            printf("extra map with %d pixels (T only)\n {", extra / nnz);
+            for (int j = 0; j < extra; j += nnz) {
                 printf(" %e", extra_map[j]);
             }
             puts(" }");
@@ -371,136 +356,76 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
 #endif
         // valid map
         memmove(x, x + extra, sizeof *x * map_size);
-        memmove(lhits, lhits + extra / Nnz, sizeof *lhits * map_size / Nnz);
-        memmove(cond, cond + extra / Nnz, sizeof *cond * map_size / Nnz);
+        memmove(lhits, lhits + extra / nnz, sizeof *lhits * map_size / nnz);
+        memmove(rcond, rcond + extra / nnz, sizeof *rcond * map_size / nnz);
+        memmove(bj_map, bj_map + nnz * extra, sizeof *bj_map * map_size * nnz);
         x = SAFEREALLOC(x, sizeof *x * map_size);
-        lhits = SAFEREALLOC(lhits, sizeof *lhits * map_size / Nnz);
-        cond = SAFEREALLOC(cond, sizeof *cond * map_size / Nnz);
+        lhits = SAFEREALLOC(lhits, sizeof *lhits * map_size / nnz);
+        rcond = SAFEREALLOC(rcond, sizeof *rcond * map_size / nnz);
+        bj_map = SAFEREALLOC(bj_map, sizeof *bj_map * map_size * nnz);
     }
 
     // get maps from all processes and combine them
 
     int *lstid = SAFEMALLOC(sizeof *lstid * map_size);
-    for (i = 0; i < map_size; i++) {
-        lstid[i] = A.lindices[i + Nnz * A.trash_pix];
+    for (int i = 0; i < map_size; i++) {
+        lstid[i] = A.lindices[i + nnz * A.trash_pix];
     }
 
     if (rank != 0) {
         MPI_Send(&map_size, 1, MPI_INT, 0, 0, comm);
         MPI_Send(lstid, map_size, MPI_INT, 0, 1, comm);
         MPI_Send(x, map_size, MPI_DOUBLE, 0, 2, comm);
-        MPI_Send(cond, map_size / Nnz, MPI_DOUBLE, 0, 3, comm);
-        MPI_Send(lhits, map_size / Nnz, MPI_INT, 0, 4, comm);
+        MPI_Send(rcond, map_size / nnz, MPI_DOUBLE, 0, 3, comm);
+        MPI_Send(lhits, map_size / nnz, MPI_INT, 0, 4, comm);
+        MPI_Send(bj_map, map_size * nnz, MPI_DOUBLE, 0, 5, comm);
     }
 
     if (rank == 0) {
-        int npix = 12 * nside * nside;
         int oldsize;
 
-        double *mapI = NULL;
-        if (Nnz == 3) {
-            mapI = SAFECALLOC(npix, sizeof *mapI);
-        }
-        double *mapQ = SAFECALLOC(npix, sizeof *mapQ);
-        double *mapU = SAFECALLOC(npix, sizeof *mapU);
-        int *hits = SAFECALLOC(npix, sizeof *hits);
-        double *Cond = SAFECALLOC(npix, sizeof *Cond);
+        MappraiserOutputs outputs;
+        initMappraiserOutputs(&outputs, nside, nnz, outpath, ref);
 
-        for (i = 0; i < size; i++) {
-            if (i != 0) {
+        for (int proc = 0; proc < world_size; proc++) {
+            if (proc != 0) {
+                // Receive data from other processes
                 oldsize = map_size;
-                MPI_Recv(&map_size, 1, MPI_INT, i, 0, comm, &status);
+                MPI_Recv(&map_size, 1, MPI_INT, proc, 0, comm, &status);
                 if (oldsize != map_size) {
                     lstid = SAFEREALLOC(lstid, sizeof *lstid * map_size);
                     x = SAFEREALLOC(x, sizeof *x * map_size);
-                    cond = SAFEREALLOC(cond, sizeof *cond * map_size);
-                    lhits = SAFEREALLOC(lhits, sizeof *lhits * map_size);
+                    rcond = SAFEREALLOC(rcond, sizeof *rcond * map_size / nnz);
+                    lhits = SAFEREALLOC(lhits, sizeof *lhits * map_size / nnz);
+                    bj_map =
+                        SAFEREALLOC(bj_map, sizeof *bj_map * map_size * nnz);
                 }
-                MPI_Recv(lstid, map_size, MPI_INT, i, 1, comm, &status);
-                MPI_Recv(x, map_size, MPI_DOUBLE, i, 2, comm, &status);
-                MPI_Recv(cond, map_size / Nnz, MPI_DOUBLE, i, 3, comm, &status);
-                MPI_Recv(lhits, map_size / Nnz, MPI_INT, i, 4, comm, &status);
+                MPI_Recv(lstid, map_size, MPI_INT, proc, 1, comm, &status);
+                MPI_Recv(x, map_size, MPI_DOUBLE, proc, 2, comm, &status);
+                MPI_Recv(rcond, map_size / nnz, MPI_DOUBLE, proc, 3, comm,
+                         &status);
+                MPI_Recv(lhits, map_size / nnz, MPI_INT, proc, 4, comm,
+                         &status);
+                MPI_Recv(bj_map, map_size * nnz, MPI_DOUBLE, proc, 5, comm,
+                         &status);
             }
-            x2map_pol(mapI, mapQ, mapU, Cond, hits, x, lstid, cond, lhits,
-                      map_size, Nnz);
+            populateMappraiserOutputs(&outputs, x, lstid, rcond, lhits, bj_map,
+                                      map_size, nnz);
         }
+
+        // Remove old files before writing new ones
         puts("Checking output directory... old files will be overwritten");
-        char Imap_name[FILENAME_MAX];
-        char Qmap_name[FILENAME_MAX];
-        char Umap_name[FILENAME_MAX];
-        char Condmap_name[FILENAME_MAX];
-        char Hitsmap_name[FILENAME_MAX];
-        char nest = 1;
-        char *cordsys = "C";
-        int ret, w = 1;
+        int remove_info = clearFiles(&outputs);
 
-        if (Nnz == 3) {
-            sprintf(Imap_name, "%s/mapI_%s.fits", outpath, ref);
-            if (access(Imap_name, F_OK) != -1) {
-                ret = remove(Imap_name);
-                if (ret != 0) {
-                    printf("Error: unable to delete the file %s\n", Imap_name);
-                    w = 0;
-                }
-            }
-        }
-
-        sprintf(Qmap_name, "%s/mapQ_%s.fits", outpath, ref);
-        sprintf(Umap_name, "%s/mapU_%s.fits", outpath, ref);
-        sprintf(Condmap_name, "%s/Cond_%s.fits", outpath, ref);
-        sprintf(Hitsmap_name, "%s/Hits_%s.fits", outpath, ref);
-
-        if (access(Qmap_name, F_OK) != -1) {
-            ret = remove(Qmap_name);
-            if (ret != 0) {
-                printf("Error: unable to delete the file %s\n", Qmap_name);
-                w = 0;
-            }
-        }
-
-        if (access(Umap_name, F_OK) != -1) {
-            ret = remove(Umap_name);
-            if (ret != 0) {
-                printf("Error: unable to delete the file %s\n", Umap_name);
-                w = 0;
-            }
-        }
-
-        if (access(Condmap_name, F_OK) != -1) {
-            ret = remove(Condmap_name);
-            if (ret != 0) {
-                printf("Error: unable to delete the file %s\n", Condmap_name);
-                w = 0;
-            }
-        }
-
-        if (access(Hitsmap_name, F_OK) != -1) {
-            ret = remove(Hitsmap_name);
-            if (ret != 0) {
-                printf("Error: unable to delete the file %s\n", Hitsmap_name);
-                w = 0;
-            }
-        }
-
-        if (w == 1) {
+        if (remove_info == 0) {
             printf("Writing HEALPix maps FITS files to %s...\n", outpath);
-            if (Nnz == 3) {
-                write_map(mapI, TDOUBLE, nside, Imap_name, nest, cordsys);
-            }
-            write_map(mapQ, TDOUBLE, nside, Qmap_name, nest, cordsys);
-            write_map(mapU, TDOUBLE, nside, Umap_name, nest, cordsys);
-            write_map(Cond, TDOUBLE, nside, Condmap_name, nest, cordsys);
-            write_map(hits, TINT, nside, Hitsmap_name, nest, cordsys);
+            writeFiles(&outputs);
         } else {
             fprintf(stderr, "IO Error: Could not overwrite old files, map "
                             "results will not be stored ;(\n");
         }
 
-        FREE(mapI);
-        FREE(mapQ);
-        FREE(mapU);
-        FREE(Cond);
-        FREE(hits);
+        freeMappraiserOutputs(&outputs);
     }
 
     elapsed = MPI_Wtime() - st;
@@ -511,7 +436,7 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
 
     // free memory
     FREE(x);
-    FREE(cond);
+    FREE(rcond);
     FREE(lhits);
 
     MatFree(&A);
@@ -519,208 +444,5 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
     A.values = NULL;
     FREE(lstid);
 
-    // MPI_Finalize();
-}
-
-WeightStgy handle_gaps(Gap *Gaps, Mat *A, Tpltz *Nm1, Tpltz *N, GapStrategy gs,
-                       double *b, const double *noise, bool do_gap_filling,
-                       uint64_t realization, const uint64_t *detindxs,
-                       const uint64_t *obsindxs, const uint64_t *telescopes,
-                       double sample_rate) {
-    int my_rank;
-    MPI_Comm_rank(A->comm, &my_rank);
-
-    compute_gaps_per_block(Gaps, Nm1->nb_blocks_loc, Nm1->tpltzblocks);
-    copy_gap_info(Nm1->nb_blocks_loc, Nm1->tpltzblocks, N->tpltzblocks);
-
-#if 0
-    if (my_rank == 0) {
-        puts("gap informations");
-        for (int i = 0; i < Nm1->nb_blocks_loc; ++i) {
-            printf("block %d: first %d last %d\n", i,
-                   Nm1->tpltzblocks[i].first_gap, Nm1->tpltzblocks[i].last_gap);
-        }
-        fflush(stdout);
-    }
-
-    MPI_Barrier(A->comm);
-#endif
-
-    WeightStgy ws;
-
-    // When not doing gap-filling, set signal in the gaps to zero
-    const bool reset_signal_in_gaps = !do_gap_filling;
-
-    switch (gs) {
-
-    case COND:
-        // set noise weighting strategy
-        ws = BASIC;
-
-        if (my_rank == 0) {
-            puts("[Gaps/conditioning] weighting strategy = BASIC");
-        }
-
-        // set signal in all gaps to zero
-        if (reset_signal_in_gaps) {
-            reset_relevant_gaps(b, Nm1, Gaps);
-        }
-
-        // this is not needed any more
-        // condition_extra_pix_zero(A);
-
-        // recombine signal and noise
-        for (int i = 0; i < A->m; ++i) {
-            b[i] += noise[i];
-        }
-
-        if (do_gap_filling) {
-            perform_gap_filling(A->comm, N, Nm1, b, Gaps, realization, detindxs,
-                                obsindxs, telescopes, sample_rate, true);
-        } else {
-            // perfect noise reconstruction
-            if (my_rank == 0) {
-                puts("[Gaps/conditioning] perfect noise reconstruction");
-            }
-        }
-
-        break;
-
-    case MARG_LOCAL_SCAN:
-        // set noise weighting strategy
-        ws = BASIC;
-
-        if (my_rank == 0) {
-            puts("[Gaps/marginalization] weighting strategy = BASIC");
-        }
-
-        // set signal in all gaps to zero
-        if (reset_signal_in_gaps) {
-            reset_relevant_gaps(b, Nm1, Gaps);
-        }
-
-        // recombine signal and noise
-        for (int i = 0; i < A->m; ++i) {
-            b[i] += noise[i];
-        }
-
-        if (do_gap_filling) {
-            perform_gap_filling(A->comm, N, Nm1, b, Gaps, realization, detindxs,
-                                obsindxs, telescopes, sample_rate, true);
-        } else {
-            // perfect noise reconstruction
-            if (my_rank == 0) {
-                puts("[Gaps/marginalization] perfect noise reconstruction");
-            }
-        }
-
-        break;
-
-    case NESTED_PCG:
-        // set noise weighting strategy
-        ws = ITER;
-
-        if (my_rank == 0) {
-            puts("[Gaps/nested] weighting strategy = ITER");
-        }
-
-        // recombine signal and noise
-        for (int i = 0; i < A->m; ++i) {
-            b[i] += noise[i];
-        }
-
-        break;
-
-    case NESTED_PCG_NO_GAPS:
-        // set noise weighting strategy
-        ws = ITER_IGNORE;
-
-        if (my_rank == 0) {
-            puts("[Gaps/nested-ignore] weighting strategy = ITER_IGNORE");
-        }
-
-        // set signal in all gaps to zero
-        if (reset_signal_in_gaps) {
-            reset_relevant_gaps(b, Nm1, Gaps);
-        }
-
-        // recombine signal and noise
-        for (int i = 0; i < A->m; ++i) {
-            b[i] += noise[i];
-        }
-
-        if (do_gap_filling) {
-            perform_gap_filling(A->comm, N, Nm1, b, Gaps, realization, detindxs,
-                                obsindxs, telescopes, sample_rate, true);
-        } else {
-            // perfect noise reconstruction
-            if (my_rank == 0) {
-                puts("[Gaps/nested-ignore] perfect noise reconstruction");
-            }
-        }
-
-        break;
-
-    case MARG_PROC:
-        // set noise weighting strategy
-        ws = BASIC;
-
-        if (my_rank == 0) {
-            puts("[Gaps/marginalization] weighting strategy = BASIC");
-        }
-
-        // set signal in all gaps to zero
-        if (reset_signal_in_gaps) {
-            reset_relevant_gaps(b, Nm1, Gaps);
-        }
-
-        // recombine signal and noise
-        for (int i = 0; i < A->m; ++i) {
-            b[i] += noise[i];
-        }
-
-        if (do_gap_filling) {
-            perform_gap_filling(A->comm, N, Nm1, b, Gaps, realization, detindxs,
-                                obsindxs, telescopes, sample_rate, true);
-        } else {
-            // perfect noise reconstruction
-            if (my_rank == 0) {
-                puts("[Gaps/marginalization] perfect noise reconstruction");
-            }
-        }
-
-        break;
-    }
-    fflush(stdout);
-
-    return ws;
-}
-
-void x2map_pol(double *mapI, double *mapQ, double *mapU, double *Cond,
-               int *hits, const double *x, const int *lstid, const double *cond,
-               const int *lhits, int xsize, int nnz) {
-    for (int i = 0; i < xsize; i++) {
-        int ipix = (int)(lstid[i] / nnz);
-        if (nnz == 3) {
-            // I, Q and U maps
-            if (i % nnz == 0) {
-                mapI[ipix] = x[i];
-                hits[ipix] = lhits[(int)(i / nnz)];
-                Cond[ipix] = cond[(int)(i / nnz)];
-            } else if (i % nnz == 1) {
-                mapQ[ipix] = x[i];
-            } else {
-                mapU[ipix] = x[i];
-            }
-        } else {
-            // only Q and U maps are estimated
-            if (i % nnz == 0) {
-                mapQ[ipix] = x[i];
-                hits[ipix] = lhits[(int)(i / nnz)];
-                Cond[ipix] = cond[(int)(i / nnz)];
-            } else {
-                mapU[ipix] = x[i];
-            }
-        }
-    }
+    PrecondFree(P);
 }

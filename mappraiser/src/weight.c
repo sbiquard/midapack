@@ -15,10 +15,187 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
+#include <mappraiser/gap_filling.h>
 #include <mappraiser/mapping.h>
 #include <mappraiser/solver_info.h>
 #include <mappraiser/weight.h>
 #include <memutils.h>
+
+WeightStgy createFromGapStrategy(Gap *Gaps, Mat *A, Tpltz *Nm1, Tpltz *N,
+                                 GapStrategy gs, double *b, const double *noise,
+                                 bool do_gap_filling, uint64_t realization,
+                                 const uint64_t *detindxs,
+                                 const uint64_t *obsindxs,
+                                 const uint64_t *telescopes,
+                                 double sample_rate) {
+    int my_rank;
+    MPI_Comm_rank(A->comm, &my_rank);
+
+    compute_gaps_per_block(Gaps, Nm1->nb_blocks_loc, Nm1->tpltzblocks);
+    copy_gap_info(Nm1->nb_blocks_loc, Nm1->tpltzblocks, N->tpltzblocks);
+
+#if 0
+    if (my_rank == 0) {
+        puts("gap informations");
+        for (int i = 0; i < Nm1->nb_blocks_loc; ++i) {
+            printf("block %d: first %d last %d\n", i,
+                   Nm1->tpltzblocks[i].first_gap, Nm1->tpltzblocks[i].last_gap);
+        }
+        fflush(stdout);
+    }
+
+    MPI_Barrier(A->comm);
+#endif
+
+    WeightStgy ws;
+
+    // When not doing gap-filling, set signal in the gaps to zero
+    const bool reset_signal_in_gaps = !do_gap_filling;
+
+    switch (gs) {
+
+    case COND:
+        // set noise weighting strategy
+        ws = BASIC;
+
+        if (my_rank == 0) {
+            puts("[Gaps/conditioning] weighting strategy = BASIC");
+        }
+
+        // set signal in all gaps to zero
+        if (reset_signal_in_gaps) {
+            reset_relevant_gaps(b, Nm1, Gaps);
+        }
+
+        // this is not needed any more
+        // condition_extra_pix_zero(A);
+
+        // recombine signal and noise
+        for (int i = 0; i < A->m; ++i) {
+            b[i] += noise[i];
+        }
+
+        if (do_gap_filling) {
+            perform_gap_filling(A->comm, N, Nm1, b, Gaps, realization, detindxs,
+                                obsindxs, telescopes, sample_rate, true);
+        } else {
+            // perfect noise reconstruction
+            if (my_rank == 0) {
+                puts("[Gaps/conditioning] perfect noise reconstruction");
+            }
+        }
+
+        break;
+
+    case MARG_LOCAL_SCAN:
+        // set noise weighting strategy
+        ws = BASIC;
+
+        if (my_rank == 0) {
+            puts("[Gaps/marginalization] weighting strategy = BASIC");
+        }
+
+        // set signal in all gaps to zero
+        if (reset_signal_in_gaps) {
+            reset_relevant_gaps(b, Nm1, Gaps);
+        }
+
+        // recombine signal and noise
+        for (int i = 0; i < A->m; ++i) {
+            b[i] += noise[i];
+        }
+
+        if (do_gap_filling) {
+            perform_gap_filling(A->comm, N, Nm1, b, Gaps, realization, detindxs,
+                                obsindxs, telescopes, sample_rate, true);
+        } else {
+            // perfect noise reconstruction
+            if (my_rank == 0) {
+                puts("[Gaps/marginalization] perfect noise reconstruction");
+            }
+        }
+
+        break;
+
+    case NESTED_PCG:
+        // set noise weighting strategy
+        ws = ITER;
+
+        if (my_rank == 0) {
+            puts("[Gaps/nested] weighting strategy = ITER");
+        }
+
+        // recombine signal and noise
+        for (int i = 0; i < A->m; ++i) {
+            b[i] += noise[i];
+        }
+
+        break;
+
+    case NESTED_PCG_NO_GAPS:
+        // set noise weighting strategy
+        ws = ITER_IGNORE;
+
+        if (my_rank == 0) {
+            puts("[Gaps/nested-ignore] weighting strategy = ITER_IGNORE");
+        }
+
+        // set signal in all gaps to zero
+        if (reset_signal_in_gaps) {
+            reset_relevant_gaps(b, Nm1, Gaps);
+        }
+
+        // recombine signal and noise
+        for (int i = 0; i < A->m; ++i) {
+            b[i] += noise[i];
+        }
+
+        if (do_gap_filling) {
+            perform_gap_filling(A->comm, N, Nm1, b, Gaps, realization, detindxs,
+                                obsindxs, telescopes, sample_rate, true);
+        } else {
+            // perfect noise reconstruction
+            if (my_rank == 0) {
+                puts("[Gaps/nested-ignore] perfect noise reconstruction");
+            }
+        }
+
+        break;
+
+    case MARG_PROC:
+        // set noise weighting strategy
+        ws = BASIC;
+
+        if (my_rank == 0) {
+            puts("[Gaps/marginalization] weighting strategy = BASIC");
+        }
+
+        // set signal in all gaps to zero
+        if (reset_signal_in_gaps) {
+            reset_relevant_gaps(b, Nm1, Gaps);
+        }
+
+        // recombine signal and noise
+        for (int i = 0; i < A->m; ++i) {
+            b[i] += noise[i];
+        }
+
+        if (do_gap_filling) {
+            perform_gap_filling(A->comm, N, Nm1, b, Gaps, realization, detindxs,
+                                obsindxs, telescopes, sample_rate, true);
+        } else {
+            // perfect noise reconstruction
+            if (my_rank == 0) {
+                puts("[Gaps/marginalization] perfect noise reconstruction");
+            }
+        }
+
+        break;
+    }
+    fflush(stdout);
+
+    return ws;
+}
 
 WeightMatrix createWeightMatrix(Tpltz *Nm1, Tpltz *N, Gap *G, WeightStgy stgy) {
     // assume everything already allocated
