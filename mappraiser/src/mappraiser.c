@@ -338,7 +338,13 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
 
     int map_size = get_valid_map_size(&A);
     int extra = get_actual_map_size(&A) - map_size;
-    double *bj_map = P->BJ_inv.values;
+
+    // just copy the preconditioner values and then free it
+    double *bj_map = SAFEMALLOC(sizeof *bj_map * map_size * nnz);
+    memcpy(bj_map, P->BJ_inv.values + extra * nnz,
+           sizeof *bj_map * map_size * nnz);
+
+    PrecondFree(P);
 
     if (extra > 0) {
 #ifdef DEBUG
@@ -358,11 +364,9 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
         memmove(x, x + extra, sizeof *x * map_size);
         memmove(lhits, lhits + extra / nnz, sizeof *lhits * map_size / nnz);
         memmove(rcond, rcond + extra / nnz, sizeof *rcond * map_size / nnz);
-        memmove(bj_map, bj_map + nnz * extra, sizeof *bj_map * map_size * nnz);
         x = SAFEREALLOC(x, sizeof *x * map_size);
         lhits = SAFEREALLOC(lhits, sizeof *lhits * map_size / nnz);
         rcond = SAFEREALLOC(rcond, sizeof *rcond * map_size / nnz);
-        bj_map = SAFEREALLOC(bj_map, sizeof *bj_map * map_size * nnz);
     }
 
     // get maps from all processes and combine them
@@ -443,6 +447,4 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
     A.indices = NULL;
     A.values = NULL;
     FREE(lstid);
-
-    PrecondFree(P);
 }

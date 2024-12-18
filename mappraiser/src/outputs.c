@@ -97,7 +97,7 @@ void freeMappraiserOutputs(MappraiserOutputs *o) {
     FREE(o->precUU);
     FREE(o->rcond);
     FREE(o->hits);
-    for (int i = 0; i < o->max_count; ++i)
+    for (int i = 0; i < o->real_count; ++i)
         FREE(o->files[i]);
     o->real_count = 0;
     FREE(o->files);
