@@ -333,10 +333,9 @@ class MapMaker(ToastOperator):
                 acc += block_size
         else:
             fft_size = max(next_fast_fft_size(block_size) for block_size in block_sizes)
-            if self.noise_model is None:
+            if self.estimate_psd:
                 # estimate the noise covariance from the data
-                psds, success = estimate_psd(noise, block_sizes, fft_size, rate=self.fsample)
-                # TODO: handle blocks where the estimation failed
+                psds = estimate_psd(noise, block_sizes, fft_size, rate=self.fsample)
             else:
                 # interpolate the PSD from an existing Noise model
                 psds = ctnr.get_interp_psds(fft_size, rate=self.fsample)

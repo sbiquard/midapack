@@ -9,6 +9,12 @@ from toast.utils import Logger, memreport
 
 from .. import wrapper as lib
 
+F0_FK_PIVOT = 1e-2
+PSD_FIT_GUESS = [1.0, -1.0, 0.1, 1e-5]
+PSD_FIT_BOUNDS = ([0, -10, F0_FK_PIVOT, 0], [np.inf, 0, np.inf, F0_FK_PIVOT])  # fk > f0
+
+WELCH_SEGMENT_DURATION = 600  # 10 minutes
+
 
 def log_time_memory(
     data: ToastData,
@@ -80,54 +86,39 @@ def estimate_psd(
     block_sizes: npt.NDArray[lib.INDEX_TYPE],
     fft_size: int,
     rate: float = 1.0,
-) -> tuple[npt.NDArray, npt.NDArray]:
+) -> npt.NDArray:
     """Estimate the PSD for each block of a noise timestream using Welch's method"""
 
     def func(tod):
-        # average the periodogram estimate over 10 minute segments
-        nperseg = int(600 * rate)
+        # average the periodogram estimate over segments
+        nperseg = int(WELCH_SEGMENT_DURATION * rate)
         f, Pxx = welch(tod, fs=rate, nperseg=nperseg)
         # fit and compute full size PSD from fitted parameters
         params = fit_psd_model(f, Pxx)
         freq = np.fft.rfftfreq(fft_size, 1 / rate)
         psd = _model(freq, *params)
-        # zero out the DC component
-        psd[0] = 0
         return psd
 
-    psd = np.empty((len(block_sizes), fft_size))
-    success = np.ones_like(block_sizes, dtype=bool)
+    psds = np.empty((*block_sizes.shape, fft_size // 2 + 1))
     acc = 0
     for i, block_size in enumerate(block_sizes):
-        try:
-            psd[i] = func(noise[acc : acc + block_size])
-        except UnreliableFit:
-            success[i] = False
-        except Exception:
-            raise
+        psds[i] = func(noise[acc : acc + block_size])
         acc += block_size
-    return psd, success
-
-
-class UnreliableFit(Exception):
-    """Raised when the covariance matrix of the fit is poorly conditioned"""
+    return psds
 
 
 def fit_psd_model(f, Pxx):
     """Fit a 1/f PSD model to the periodogram in log space"""
-    init_params = np.array([1.0, -1.0, 0.1, 1e-5])
-    final_params, pcov = curve_fit(
+    popt, _ = curve_fit(
         _log_model,
         f[1:],
         np.log10(Pxx[1:]),
-        p0=init_params,
-        # bounds=([-20, -10, 0.0, 0.0], [0.0, 0.0, 20, 1]),
-        maxfev=1000,
+        p0=PSD_FIT_GUESS,
+        bounds=PSD_FIT_BOUNDS,
+        x_scale=[1e-5, 1, 1, 1e-2],
+        nan_policy='raise',
     )
-    if np.linalg.cond(pcov) > 1e10:
-        # TODO: what threshold to use?
-        raise UnreliableFit
-    return final_params
+    return popt
 
 
 def _log_model(x, sigma, alpha, fk, f0):
