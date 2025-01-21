@@ -325,7 +325,7 @@ class MapMaker(ToastOperator):
             ntt.fill(1)
         elif self.lagmax == 1:
             # simply use the variance of each block of the noise data
-            # TODO: is the noise model is provided, use its 'noise weights' instead?
+            # TODO: if the noise model is provided, use its 'noise weights' instead?
             acc = 0
             for i, block_size in enumerate(block_sizes):
                 tod = noise[acc : acc + block_size]
