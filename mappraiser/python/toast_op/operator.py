@@ -1,10 +1,10 @@
+import json
 from pathlib import Path
 from typing import TypeAlias
 
 import astropy.units as u
 import numpy as np
 import numpy.typing as npt
-import tomlkit
 import traitlets
 from toast.data import Data as ToastData
 from toast.observation import default_values as defaults
@@ -210,8 +210,8 @@ class MapMaker(ToastOperator):
         outdir = Path(self.output_dir)
         if data.comm.world_rank == 0:
             outdir.mkdir(parents=True, exist_ok=True)
-            with open(outdir / 'mappraiser_args_log.toml', 'w') as file:
-                tomlkit.dump(self._params, file, sort_keys=True)
+            with open(outdir / 'mappraiser_args_log.json', 'w') as file:
+                json.dump(self._params, file, sort_keys=True, indent=2)
 
     @function_timer
     def _stage(self, data: ToastData, detectors: list[str] | None) -> None:
