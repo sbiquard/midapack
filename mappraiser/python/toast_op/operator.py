@@ -255,18 +255,29 @@ class MapMaker(ToastOperator):
         # Inverse noise covariance
         invntt, ntt = self._get_invntt(ctnr, noise, block_sizes)
 
-        # Check that sizes are consistent
-        assert n_blocks == block_sizes.size
-        assert n_blocks == telescopes.size
-        assert n_blocks == obsindxs.size
-        assert n_blocks == detindxs.size
-        assert n_blocks == invntt.size // self.lagmax
-        assert n_blocks == ntt.size // self.lagmax
-        assert data_size == block_sizes.sum()
-        assert data_size == signal.size
-        assert data_size == noise.size
-        assert data_size == pixels.size // self._nnz
-        assert data_size == weights.size // self._nnz
+        # Check that sizes are consistentif n_blocks != block_sizes.size:
+        if n_blocks != block_sizes.size:
+            raise ValueError('Mismatch in number of blocks and block sizes')
+        if n_blocks != telescopes.size:
+            raise ValueError('Mismatch in number of blocks and telescopes')
+        if n_blocks != obsindxs.size:
+            raise ValueError('Mismatch in number of blocks and observation indices')
+        if n_blocks != detindxs.size:
+            raise ValueError('Mismatch in number of blocks and detector indices')
+        if n_blocks != invntt.size // self.lagmax:
+            raise ValueError('Mismatch in number of blocks and inverse NTT size')
+        if n_blocks != ntt.size // self.lagmax:
+            raise ValueError('Mismatch in number of blocks and NTT size')
+        if data_size != block_sizes.sum():
+            raise ValueError('Mismatch in data size and sum of block sizes')
+        if data_size != signal.size:
+            raise ValueError('Mismatch in data size and signal size')
+        if data_size != noise.size:
+            raise ValueError('Mismatch in data size and noise size')
+        if data_size != pixels.size // self._nnz:
+            raise ValueError('Mismatch in data size and pixel size')
+        if data_size != weights.size // self._nnz:
+            raise ValueError('Mismatch in data size and weights size')
 
         # The user may have requested to zero the signal and/or the noise
         if self.zero_signal:

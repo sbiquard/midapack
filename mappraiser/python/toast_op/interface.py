@@ -104,7 +104,9 @@ class ObservationData:
         if not self.pair_diff:
             return a
         # check that there is an even number of detectors
-        assert a.shape[0] % 2 == 0
+        if a.shape[0] % 2 == 1:
+            msg = 'Expected even number of detectors for pair differencing'
+            raise RuntimeError(msg)
         if operation == 'half-sub':
             transformed = 0.5 * (a[::2] - a[1::2])
         elif operation == 'add':
@@ -141,7 +143,9 @@ class ObservationData:
     def get_weights(self, op: StokesWeights) -> npt.NDArray[lib.WEIGHT_TYPE]:
         weights = np.array(self.ob.detdata[op.weights][self.sdets, :], dtype=lib.WEIGHT_TYPE)
         # we always expect I/Q/U weights to be provided
-        assert weights.shape[-1] == 3
+        if weights.shape[-1] != 3:
+            msg = 'Expected I/Q/U weights to be provided'
+            raise RuntimeError(msg)
         if self.nnz == 1:
             # only I weights
             weights = weights[..., 0]
@@ -214,7 +218,7 @@ class ToastContainer:
         return np.vstack([ob.get_interp_psds(fft_size, rate) for ob in self._obs])
 
     def allgather(self, value: Any) -> list[Any]:
-        assert (comm := self.data.comm.comm_world) is not None
+        assert (comm := self.data.comm.comm_world) is not None  # pyright assert
         return comm.allgather(value)
 
     @property
