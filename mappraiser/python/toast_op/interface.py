@@ -255,6 +255,16 @@ class ToastContainer:
     def detector_uids(self) -> npt.NDArray[lib.META_ID_TYPE]:
         return np.concatenate([ob.detector_uids for ob in self._obs], axis=None)
 
+    @property
+    def observation_names(self) -> list[str]:
+        # repetition is intentional
+        return [ob.ob.name for ob in self._obs for _ in ob.fdets]  # pyright: ignore[reportReturnType]
+
+    @property
+    def detector_names(self) -> list[str]:
+        # concatenation of fdets for each observation
+        return [name for ob in self._obs for name in ob.fdets]
+
     @ft.cached_property
     def _obs(self) -> list[ObservationData]:
         return [

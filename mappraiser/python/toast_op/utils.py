@@ -1,3 +1,6 @@
+import warnings
+from pathlib import Path
+
 import numpy as np
 import numpy.typing as npt
 from scipy.optimize import curve_fit
@@ -85,40 +88,69 @@ def estimate_psd(
     noise: npt.NDArray[lib.SIGNAL_TYPE],
     block_sizes: npt.NDArray[lib.INDEX_TYPE],
     fft_size: int,
+    *,
+    obs_names: list[str],
+    det_names: list[str],
     rate: float = 1.0,
+    save_dest: Path | None = None,
 ) -> npt.NDArray:
     """Estimate the PSD for each block of a noise timestream using Welch's method"""
 
-    def func(tod):
-        # average the periodogram estimate over segments
-        nperseg = int(WELCH_SEGMENT_DURATION * rate)
-        f, Pxx = welch(tod, fs=rate, nperseg=nperseg)
-        # fit and compute full size PSD from fitted parameters
-        params = fit_psd_model(f, Pxx)
-        freq = np.fft.rfftfreq(fft_size, 1 / rate)
-        psd = _model(freq, *params)
-        return psd
-
-    psds = np.empty((*block_sizes.shape, fft_size // 2 + 1))
+    nperseg = int(WELCH_SEGMENT_DURATION * rate)
+    freq = np.fft.rfftfreq(fft_size, 1 / rate)
+    psds = np.empty((block_sizes.size, fft_size // 2 + 1))
     acc = 0
-    for i, block_size in enumerate(block_sizes):
-        psds[i] = func(noise[acc : acc + block_size])
+    for i, (block_size, obs_name, det_name) in enumerate(zip(block_sizes, obs_names, det_names)):
+        tod = noise[acc : acc + block_size]
+        f, Pxx = welch(tod, fs=rate, nperseg=nperseg)
+        popt = pcov = None
+        try:
+            popt, pcov = curve_fit(
+                _log_model,
+                f[1:],
+                np.log10(Pxx[1:]),
+                p0=PSD_FIT_GUESS,
+                bounds=PSD_FIT_BOUNDS,
+                x_scale=[1e-5, 1, 1, 1e-2],
+                nan_policy='raise',
+            )
+        except RuntimeError:
+            msg = f'Failed to fit PSD for {obs_name} - {det_name}.'
+            warnings.warn(msg)
+            psds[i] = _model(freq, *PSD_FIT_GUESS)
+        else:
+            psds[i] = _model(freq, *popt)
+
+        if save_dest is not None:
+            # save information to disk
+            # WARNING: this assumes the TOD of a given detector is not shared between processes
+            # otherwise we introduce a race condition
+            session_dest = save_dest / obs_name
+            session_dest.mkdir(parents=True, exist_ok=True)
+            np.savez(
+                session_dest / det_name,
+                block_size=block_size,
+                rate=rate,
+                nperseg=nperseg,
+                f=f,
+                Pxx=Pxx,
+                popt=popt if popt is not None else np.nan,
+                pcov=pcov if pcov is not None else np.nan,
+                fft_size=fft_size,
+            )
+            import matplotlib.pyplot as plt
+
+            if popt is not None:
+                pparams = 'sigma={:.1e}, alpha={:.1e}, fk={:.1e}, f0={:.1e}'.format(*popt)
+                plt.title(f'{det_name} - fit: {pparams}')
+            else:
+                plt.title(f'{det_name} - fit failed')
+            plt.loglog(f, Pxx, label='periodogram')
+            plt.loglog(freq, psds[i], label='fitted psd')
+            plt.legend()
+            plt.savefig(session_dest / f'{det_name}_psd.png')
         acc += block_size
     return psds
-
-
-def fit_psd_model(f, Pxx):
-    """Fit a 1/f PSD model to the periodogram in log space"""
-    popt, _ = curve_fit(
-        _log_model,
-        f[1:],
-        np.log10(Pxx[1:]),
-        p0=PSD_FIT_GUESS,
-        bounds=PSD_FIT_BOUNDS,
-        x_scale=[1e-5, 1, 1, 1e-2],
-        nan_policy='raise',
-    )
-    return popt
 
 
 def _log_model(x, sigma, alpha, fk, f0):

@@ -61,6 +61,7 @@ class MapMaker(ToastOperator):
     pair_diff = Bool(False, help='Process differenced timestreams')
     plot_tod = Bool(False, help='Plot the signal+noise TOD after staging')
     purge_det_data = Bool(True, help='Clear all observation detector data after staging')
+    save_fit_info = Bool(False, help='Save fit information when estimating noise PSD')
     zero_noise = Bool(False, help='Fill the noise buffer with zero')
     zero_signal = Bool(False, help='Fill the signal buffer with zero')
 
@@ -268,6 +269,10 @@ class MapMaker(ToastOperator):
             raise ValueError('Mismatch in number of blocks and inverse NTT size')
         if n_blocks != ntt.size // self.lagmax:
             raise ValueError('Mismatch in number of blocks and NTT size')
+        if n_blocks != len(ctnr.observation_names):
+            raise ValueError('Mismatch in number of blocks and observation names')
+        if n_blocks != len(ctnr.detector_names):
+            raise ValueError('Mismatch in number of blocks and detector names')
         if data_size != block_sizes.sum():
             raise ValueError('Mismatch in data size and sum of block sizes')
         if data_size != signal.size:
@@ -346,7 +351,16 @@ class MapMaker(ToastOperator):
             fft_size = max(next_fast_fft_size(block_size) for block_size in block_sizes)
             if self.estimate_psd:
                 # estimate the noise covariance from the data
-                psds = estimate_psd(noise, block_sizes, fft_size, rate=self.fsample)
+                save_dest = Path(self.output_dir) / 'noise_psd_fit'
+                psds = estimate_psd(
+                    noise,
+                    block_sizes,
+                    fft_size,
+                    obs_names=ctnr.observation_names,
+                    det_names=ctnr.detector_names,
+                    rate=self.fsample,
+                    save_dest=save_dest if self.save_fit_info else None,
+                )
             else:
                 # interpolate the PSD from an existing Noise model
                 psds = ctnr.get_interp_psds(fft_size, rate=self.fsample)

@@ -209,6 +209,8 @@ class InterfaceTest:
             pair_diff=self.pair_diff,
             purge_det_data=False,
             maxiter=50,
+            save_fit_info=True,
+            estimate_psd=True,
         )
         mapmaker.apply(data)
 
