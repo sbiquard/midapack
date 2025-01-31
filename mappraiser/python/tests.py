@@ -3,8 +3,8 @@ from pathlib import Path
 
 import numpy as np
 import toast.mpi
-import toast.ops as ops
 from mpi4py.MPI import Comm, Intracomm
+from toast import ops
 from toast.observation import default_values as defaults
 from toast.tests._helpers import (
     close_data,
@@ -165,9 +165,9 @@ class InterfaceTest:
 
         # Compute timestream rms
 
-        rms = dict()
+        rms = {}
         for ob in data.obs:
-            rms[ob.name] = dict()
+            rms[ob.name] = {}
             for det in ob.local_detectors:
                 flags = np.array(ob.shared[defaults.shared_flags])
                 flags |= ob.detdata[defaults.det_flags][det]

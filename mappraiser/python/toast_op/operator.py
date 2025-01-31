@@ -34,20 +34,20 @@ class MapMaker(ToastOperator):
     API = Int(0, help='Internal interface version for this operator')
 
     # Operators which we depend on
-    pixel_pointing = Instance(klass=PixelsHealpix, allow_none=True, help='Operator to generate healpix indices')  # noqa # fmt: skip
-    stokes_weights = Instance(klass=StokesWeights, allow_none=True, help='Operator to generate I/Q/U weights')  # noqa # fmt: skip
+    pixel_pointing = Instance(klass=PixelsHealpix, allow_none=True, help='Operator to generate healpix indices')  # fmt: skip
+    stokes_weights = Instance(klass=StokesWeights, allow_none=True, help='Operator to generate I/Q/U weights')  # fmt: skip
 
     # TOAST names
     det_data = Unicode(defaults.det_data, help='Observation detdata key for the timestream data')
-    noise_data = Unicode("noise", allow_None=True, help="Observation detdata key for the noise data")  # noqa # fmt: skip
+    noise_data = Unicode("noise", allow_None=True, help="Observation detdata key for the noise data")  # fmt: skip
     noise_model = Unicode(defaults.noise_model, help='Observation key containing the noise model')
 
     # Flagging and masking
     det_mask = Int(defaults.det_mask_nonscience, help='Bit mask value for per-detector flagging')
-    det_flag_mask = Int(defaults.det_mask_nonscience, help="Bit mask value for detector sample flagging")  # noqa # fmt: skip
+    det_flag_mask = Int(defaults.det_mask_nonscience, help="Bit mask value for detector sample flagging")  # fmt: skip
     det_flags = Unicode(defaults.det_flags, help='Observation detdata key for flags to use')
-    shared_flag_mask = Int(defaults.shared_mask_nonscience, help="Bit mask value for shared flagging")  # noqa # fmt: skip
-    shared_flags = Unicode(defaults.shared_flags, help="Observation shared key for telescope flags to use")  # noqa # fmt: skip
+    shared_flag_mask = Int(defaults.shared_mask_nonscience, help="Bit mask value for shared flagging")  # fmt: skip
+    shared_flags = Unicode(defaults.shared_flags, help="Observation shared key for telescope flags to use")  # fmt: skip
 
     # General configuration
     binned = Bool(False, help='Make a binned map')
@@ -94,21 +94,24 @@ class MapMaker(ToastOperator):
     def _check_det_mask(self, proposal):
         check = proposal['value']
         if check < 0:
-            raise traitlets.TraitError('Det mask should be a positive integer')
+            msg = 'Det mask should be a positive integer'
+            raise traitlets.TraitError(msg)
         return check
 
     @traitlets.validate('det_flag_mask')
     def _check_det_flag_mask(self, proposal):
         check = proposal['value']
         if check < 0:
-            raise traitlets.TraitError('Det flag mask should be a positive integer')
+            msg = 'Det flag mask should be a positive integer'
+            raise traitlets.TraitError(msg)
         return check
 
     @traitlets.validate('shared_flag_mask')
     def _check_shared_flag_mask(self, proposal):
         check = proposal['value']
         if check < 0:
-            raise traitlets.TraitError('Shared flag mask should be a positive integer')
+            msg = 'Shared flag mask should be a positive integer'
+            raise traitlets.TraitError(msg)
         return check
 
     def __init__(self, **kwargs) -> None:
@@ -133,14 +136,15 @@ class MapMaker(ToastOperator):
         )
 
     @function_timer
-    def _exec(self, data: ToastData, detectors: list[str] | None = None, **kwargs) -> None:
+    def _exec(self, data: ToastData, detectors: list[str] | None = None, **_kwargs) -> None:
         """Run mappraiser on the supplied data object"""
         self._timer.start()
 
         # Get the global communicator
         self._comm = data.comm.comm_world
         if self._comm is None:
-            raise RuntimeError('Mappraiser requires MPI, but the global communicator is None')
+            msg = 'Mappraiser requires MPI, but the global communicator is None'
+            raise RuntimeError(msg)
 
         # Setting up and staging the data
         self._log_memory(data, 'Before staging the data')
@@ -161,13 +165,16 @@ class MapMaker(ToastOperator):
         """Examine the data and determine quantities needed to set up the mappraiser run"""
         # Check that we have at least one observation
         if len(data.obs) == 0:
-            raise RuntimeError('Every supplied data object must contain at least one observation')
+            msg = 'Every supplied data object must contain at least one observation'
+            raise RuntimeError(msg)
 
         # Check that the pixel_pointing and stokes_weights operators are set
         if self.pixel_pointing is None:
-            raise RuntimeError('pixel_pointing operator must be set')
+            msg = 'pixel_pointing operator must be set'
+            raise RuntimeError(msg)
         if self.stokes_weights is None:
-            raise RuntimeError('stokes_weights operator must be set')
+            msg = 'stokes_weights operator must be set'
+            raise RuntimeError(msg)
 
         # Check if the noise data is available and set dependent traits
         if self.noise_data is None:
@@ -211,7 +218,7 @@ class MapMaker(ToastOperator):
         outdir = Path(self.output_dir)
         if data.comm.world_rank == 0:
             outdir.mkdir(parents=True, exist_ok=True)
-            with open(outdir / 'mappraiser_args_log.json', 'w') as file:
+            with (outdir / 'mappraiser_args_log.json').open('w') as file:
                 json.dump(self._params, file, sort_keys=True, indent=2)
 
     @function_timer
@@ -258,31 +265,44 @@ class MapMaker(ToastOperator):
 
         # Check that sizes are consistentif n_blocks != block_sizes.size:
         if n_blocks != block_sizes.size:
-            raise ValueError('Mismatch in number of blocks and block sizes')
+            msg = 'Mismatch in number of blocks and block sizes'
+            raise ValueError(msg)
         if n_blocks != telescopes.size:
-            raise ValueError('Mismatch in number of blocks and telescopes')
+            msg = 'Mismatch in number of blocks and telescopes'
+            raise ValueError(msg)
         if n_blocks != obsindxs.size:
-            raise ValueError('Mismatch in number of blocks and observation indices')
+            msg = 'Mismatch in number of blocks and observation indices'
+            raise ValueError(msg)
         if n_blocks != detindxs.size:
-            raise ValueError('Mismatch in number of blocks and detector indices')
+            msg = 'Mismatch in number of blocks and detector indices'
+            raise ValueError(msg)
         if n_blocks != invntt.size // self.lagmax:
-            raise ValueError('Mismatch in number of blocks and inverse NTT size')
+            msg = 'Mismatch in number of blocks and inverse NTT size'
+            raise ValueError(msg)
         if n_blocks != ntt.size // self.lagmax:
-            raise ValueError('Mismatch in number of blocks and NTT size')
+            msg = 'Mismatch in number of blocks and NTT size'
+            raise ValueError(msg)
         if n_blocks != len(ctnr.observation_names):
-            raise ValueError('Mismatch in number of blocks and observation names')
+            msg = 'Mismatch in number of blocks and observation names'
+            raise ValueError(msg)
         if n_blocks != len(ctnr.detector_names):
-            raise ValueError('Mismatch in number of blocks and detector names')
+            msg = 'Mismatch in number of blocks and detector names'
+            raise ValueError(msg)
         if data_size != block_sizes.sum():
-            raise ValueError('Mismatch in data size and sum of block sizes')
+            msg = 'Mismatch in data size and sum of block sizes'
+            raise ValueError(msg)
         if data_size != signal.size:
-            raise ValueError('Mismatch in data size and signal size')
+            msg = 'Mismatch in data size and signal size'
+            raise ValueError(msg)
         if data_size != noise.size:
-            raise ValueError('Mismatch in data size and noise size')
+            msg = 'Mismatch in data size and noise size'
+            raise ValueError(msg)
         if data_size != pixels.size // self._nnz:
-            raise ValueError('Mismatch in data size and pixel size')
+            msg = 'Mismatch in data size and pixel size'
+            raise ValueError(msg)
         if data_size != weights.size // self._nnz:
-            raise ValueError('Mismatch in data size and weights size')
+            msg = 'Mismatch in data size and weights size'
+            raise ValueError(msg)
 
         # The user may have requested to zero the signal and/or the noise
         if self.zero_signal:
@@ -316,7 +336,7 @@ class MapMaker(ToastOperator):
             axs[0].set_title('Signal')
             axs[1].set_title('Noise')
             acc = 0
-            for i, size in enumerate(block_sizes):
+            for size in block_sizes:
                 slc = slice(acc, acc + size)
                 axs[0].plot(signal[slc], alpha=0.5, color='k')
                 axs[1].plot(noise[slc], alpha=0.5, color='k')

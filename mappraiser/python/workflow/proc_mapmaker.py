@@ -1,11 +1,10 @@
 """Mapmaking with the MAPPRAISER framework."""
 
+from mappraiser.toast_op import operator as mappraiser_op
 from sotodlib.toast.workflows.job import workflow_timer
 
-from mappraiser.toast_op import operator as mappraiser_op
 
-
-def setup_mapmaker_mappraiser(parser, operators):
+def setup_mapmaker_mappraiser(_parser, operators):
     """Add commandline args and operators for the MAPPRAISER mapmaker.
 
     Args:
@@ -16,7 +15,7 @@ def setup_mapmaker_mappraiser(parser, operators):
 
 
 @workflow_timer
-def mapmaker_mappraiser(job, otherargs, runargs, data):
+def mapmaker_mappraiser(job, otherargs, _runargs, data):
     """Run the MAPPRAISER mapmaker.
 
     Args:

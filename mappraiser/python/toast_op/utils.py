@@ -61,7 +61,7 @@ def log_time_memory(
 def pairwise(iterable):
     "s -> (s0, s1), (s2, s3), (s4, s5), ..."
     a = iter(iterable)
-    return zip(a, a)
+    return zip(a, a, strict=True)
 
 
 def next_fast_fft_size(n: int) -> int:
@@ -80,8 +80,7 @@ def interpolate_psd(
     log_xp = np.log10(freq + freq_shift)
     log_fp = np.log10(psd + psd_shift)
     interp_psd = np.interp(log_x, log_xp, log_fp)
-    interp_psd = np.power(10.0, interp_psd) - psd_shift
-    return interp_psd
+    return np.power(10.0, interp_psd) - psd_shift
 
 
 def estimate_psd(
@@ -100,7 +99,9 @@ def estimate_psd(
     freq = np.fft.rfftfreq(fft_size, 1 / rate)
     psds = np.empty((block_sizes.size, fft_size // 2 + 1))
     acc = 0
-    for i, (block_size, obs_name, det_name) in enumerate(zip(block_sizes, obs_names, det_names)):
+    for i, (block_size, obs_name, det_name) in enumerate(
+        zip(block_sizes, obs_names, det_names, strict=True)
+    ):
         tod = noise[acc : acc + block_size]
         f, Pxx = welch(tod, fs=rate, nperseg=nperseg)
         popt = pcov = None
@@ -116,7 +117,7 @@ def estimate_psd(
             )
         except RuntimeError:
             msg = f'Failed to fit PSD for {obs_name} - {det_name}.'
-            warnings.warn(msg)
+            warnings.warn(msg, stacklevel=2)
             psds[i] = _model(freq, *PSD_FIT_GUESS)
         else:
             psds[i] = _model(freq, *popt)
@@ -154,13 +155,11 @@ def estimate_psd(
 
 
 def _log_model(x, sigma, alpha, fk, f0):
-    log_psd = 2 * np.log10(sigma) + np.log10(1 + ((x + f0) / fk) ** alpha)
-    return log_psd
+    return 2 * np.log10(sigma) + np.log10(1 + ((x + f0) / fk) ** alpha)
 
 
 def _model(x, sigma, alpha, fk, f0):
-    psd = sigma**2 * (1 + ((x + f0) / fk) ** alpha)
-    return psd
+    return sigma**2 * (1 + ((x + f0) / fk) ** alpha)
 
 
 def psd_to_invntt(psd: npt.NDArray, correlation_length: int) -> npt.NDArray[lib.INVTT_TYPE]:
@@ -192,11 +191,11 @@ def apodization_window(size: int, kind: str = 'chebwin') -> npt.NDArray:
         at = 150  # attenuation level (dB)
         window_type = ('chebwin', at)
     else:
-        raise RuntimeError(f'Apodization window {kind!r} is not supported.')
+        msg = f'Apodization window {kind!r} is not supported.'
+        raise RuntimeError(msg)
 
     window = np.array(get_window(window_type, 2 * size))
-    window = np.fft.ifftshift(window)[:size]
-    return window
+    return np.fft.ifftshift(window)[:size]
 
 
 def folded_psd(inv_n_tt: npt.NDArray[lib.INVTT_TYPE], fft_size: int) -> npt.NDArray:
@@ -219,8 +218,7 @@ def _get_kernel(n_tt: npt.NDArray[lib.INVTT_TYPE], size: int) -> npt.NDArray[lib
     if padding_size < 0:
         msg = f'The maximum lag ({lagmax}) is too large for the required kernel size ({size}).'
         raise ValueError(msg)
-    kernel = np.concatenate((n_tt, np.zeros(padding_size), n_tt[-1:0:-1]))
-    return kernel
+    return np.concatenate((n_tt, np.zeros(padding_size), n_tt[-1:0:-1]))
 
 
 def effective_ntt(
@@ -229,5 +227,4 @@ def effective_ntt(
     func = np.vectorize(folded_psd, signature='(m),()->(n)')
     effective_psd = func(invntt, fft_size)
     lagmax = invntt.shape[-1]
-    ntt_eff = psd_to_ntt(effective_psd, lagmax)
-    return ntt_eff
+    return psd_to_ntt(effective_psd, lagmax)

@@ -13,17 +13,15 @@ __all__ = [
 _mappraiser = None
 try:
     _mappraiser = ct.CDLL('libmappraiser.so')
-except OSError:
+except OSError as e:
     path = ctu.find_library('mappraiser')
     if path is None:
         # Mappraiser was not found in the system
-        raise ImportError('Mappraiser library not found')
+        msg = 'Mappraiser library not found'
+        raise ImportError(msg) from e
     _mappraiser = ct.CDLL(path)
 
-if MPI._sizeof(MPI.Comm) == ct.sizeof(ct.c_int):
-    MPI_Comm = ct.c_int
-else:
-    MPI_Comm = ct.c_void_p
+MPI_Comm = ct.c_int if MPI._sizeof(MPI.Comm) == ct.sizeof(ct.c_int) else ct.c_void_p
 
 
 ############################################################
@@ -83,7 +81,8 @@ def MLmap(
     tt,
 ):
     if _mappraiser is None:
-        raise RuntimeError('No libmappraiser available, cannot reconstruct the map')
+        msg = 'No libmappraiser available, cannot reconstruct the map'
+        raise RuntimeError(msg)
 
     outpath = params['output_dir'].encode('ascii')
     ref = params['ref'].encode('ascii')
@@ -126,5 +125,3 @@ def MLmap(
         inv_tt,
         tt,
     )
-
-    return

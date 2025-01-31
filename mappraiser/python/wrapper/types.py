@@ -3,14 +3,14 @@ from enum import IntEnum, auto
 import numpy as np
 
 __all__ = [
+    'INDEX_TYPE',
+    'INVTT_TYPE',
+    'META_ID_TYPE',
+    'SIGNAL_TYPE',
+    'WEIGHT_TYPE',
     'GapStrategy',
     'PrecondType',
     'SolverType',
-    'SIGNAL_TYPE',
-    'INDEX_TYPE',
-    'WEIGHT_TYPE',
-    'INVTT_TYPE',
-    'META_ID_TYPE',
     # "TIMESTAMP_TYPE",
     # "PSD_TYPE",
 ]

@@ -41,7 +41,8 @@ class ObservationData:
     def __post_init__(self):
         # Run some checks
         if self.nnz not in (1, 2, 3):
-            raise ValueError('nnz must be either 1, 2, or 3')
+            msg = 'nnz must be either 1, 2, or 3'
+            raise ValueError(msg)
 
     @property
     def samples(self) -> int:
@@ -69,7 +70,8 @@ class ObservationData:
         This method only makes sense if we are doing pair differencing.
         """
         if not self.pair_diff:
-            raise ValueError('This method should only be called when doing pair differencing')
+            msg = 'This method should only be called when doing pair differencing'
+            raise ValueError(msg)
         return [commonprefix([a, b]) for a, b in pairwise(self.sdets)]
 
     @property
@@ -90,7 +92,8 @@ class ObservationData:
     def session_uids(self) -> npt.NDArray[lib.META_ID_TYPE]:
         # NB: we duplicate the information on purpose
         if (session := self.ob.session) is None:
-            raise ValueError('Observation does not have a session attribute')
+            msg = 'Observation does not have a session attribute'
+            raise ValueError(msg)
         return np.array([session.uid for _ in self.fdets], dtype=lib.META_ID_TYPE)
 
     @property
@@ -112,7 +115,8 @@ class ObservationData:
         elif operation == 'add':
             transformed = a[::2] + a[1::2]
         else:
-            raise ValueError(f'Invalid operation {operation!r}')
+            msg = f'Invalid operation {operation!r}'
+            raise ValueError(msg)
         return transformed.astype(a.dtype)
 
     def get_signal(self) -> npt.NDArray[lib.SIGNAL_TYPE]:
@@ -123,7 +127,8 @@ class ObservationData:
 
     def get_noise(self) -> npt.NDArray[lib.SIGNAL_TYPE]:
         if self.noise_data is None:
-            raise RuntimeError('Can not access noise without a field name')
+            msg = 'Can not access noise without a field name'
+            raise RuntimeError(msg)
         noise = np.array(self.ob.detdata[self.noise_data][self.sdets, :], dtype=lib.SIGNAL_TYPE)
         if self.purge:
             del self.ob.detdata[self.noise_data]
@@ -159,7 +164,8 @@ class ObservationData:
     def get_interp_psds(self, fft_size: int, rate: float = 1.0):
         """Return a 2-d array of interpolated PSDs for the selected detectors"""
         if self.noise_model is None:
-            raise ValueError('Noise model not provided')
+            msg = 'Noise model not provided'
+            raise ValueError(msg)
         model = self.ob[self.noise_model]
         psds = np.array(
             [
@@ -214,11 +220,13 @@ class ToastContainer:
     def get_interp_psds(self, fft_size: int, rate: float = 1.0) -> npt.NDArray:
         """Return a 2-d array of interpolated PSDs for the selected detectors"""
         if self.noise_model is None:
-            raise ValueError('Noise model not provided')
+            msg = 'Noise model not provided'
+            raise ValueError(msg)
         return np.vstack([ob.get_interp_psds(fft_size, rate) for ob in self._obs])
 
     def allgather(self, value: Any) -> list[Any]:
-        assert (comm := self.data.comm.comm_world) is not None  # pyright assert
+        comm = self.data.comm.comm_world
+        assert comm is not None  # pyright assert
         return comm.allgather(value)
 
     @property
@@ -229,14 +237,12 @@ class ToastContainer:
     @property
     def n_local_blocks(self) -> int:
         """Compute the number of local blocks, summed over all observations"""
-        s = sum(len(ob.fdets) for ob in self._obs)
-        return s
+        return sum(len(ob.fdets) for ob in self._obs)
 
     @property
     def local_data_size(self) -> int:
         """Compute the size of the local signal buffer"""
-        s = sum(ob.samples * len(ob.fdets) for ob in self._obs)
-        return s
+        return sum(ob.samples * len(ob.fdets) for ob in self._obs)
 
     @property
     def local_block_sizes(self) -> npt.NDArray[lib.INDEX_TYPE]:

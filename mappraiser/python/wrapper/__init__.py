@@ -17,15 +17,15 @@ from .types import (
 )
 
 __all__ = [
-    'GapStrategy',
-    'PrecondType',
-    'SolverType',
-    'MLmap',
-    'SIGNAL_TYPE',
     'INDEX_TYPE',
-    'WEIGHT_TYPE',
     'INVTT_TYPE',
     'META_ID_TYPE',
+    'SIGNAL_TYPE',
+    'WEIGHT_TYPE',
+    'GapStrategy',
+    'MLmap',
+    'PrecondType',
+    'SolverType',
     # "TIMESTAMP_TYPE",
     # "PSD_TYPE",
 ]

@@ -23,32 +23,22 @@ an interactive python session.
 import argparse
 import datetime
 import os
-import sys
-import traceback
-
-import numpy as np
+from pathlib import Path
 
 # Make sure pixell uses a reliable FFT engine
 import pixell.fft
 
-# Import sotodlib.toast first, since that sets default object names
-# to use in toast.
-import sotodlib.toast as sotoast
-import toast
-import toast.ops
-from astropy import units as u
-from sotodlib.toast import ops as so_ops
-from sotodlib.toast import workflows as wrk
-from sotodlib.toast.workflows.job import (
-    workflow_timer,  # This is only needed for the mappraiser workflow temporarily defined here
-)
-from toast.mpi import MPI, Comm
-from toast.observation import default_values as defaults
-from toast.utils import Environment, Logger, memreport
-
 pixell.fft.engine = 'fftw'
 
+# Import sotodlib.toast first, since that sets default object names
+# to use in toast.
+import sotodlib.toast as sotoast  # noqa: F401
+import toast
+import toast.ops
 from mappraiser.workflow import mapmaker_mappraiser, setup_mapmaker_mappraiser
+from sotodlib.toast import workflows as wrk
+from toast.observation import default_values as defaults
+from toast.utils import Environment, Logger, memreport
 
 
 def simulate_data(job, otherargs, runargs, comm):
@@ -143,7 +133,7 @@ def reduce_data(job, otherargs, runargs, data):
 
 
 def main():
-    env = Environment.get()
+    _env = Environment.get()
     log = Logger.get()
     gt = toast.timing.GlobalTimers.get()
     gt.start('toast_so_sim (total)')
@@ -156,10 +146,7 @@ def main():
     # If the user has not told us to use multiple threads,
     # then just use one.
 
-    if 'OMP_NUM_THREADS' in os.environ:
-        nthread = os.environ['OMP_NUM_THREADS']
-    else:
-        nthread = 1
+    nthread = os.environ.get('OMP_NUM_THREADS', 1)
     log.info_rank(
         f'Executing workflow with {procs} MPI tasks, each with '
         f'{nthread} OpenMP threads at {datetime.datetime.now()}',
@@ -197,8 +184,8 @@ def main():
     # The operators and templates we want to configure from the command line
     # or a parameter file.
 
-    operators = list()
-    templates = list()
+    operators = []
+    templates = []
 
     # Loading data from disk is disabled by default
     wrk.setup_load_data_hdf5(operators)
@@ -261,8 +248,7 @@ def main():
 
     # Create our output directory
     if comm is None or comm.rank == 0:
-        if not os.path.isdir(otherargs.out_dir):
-            os.makedirs(otherargs.out_dir, exist_ok=True)
+        Path(otherargs.out_dir).mkdir(parents=True, exist_ok=True)
 
     # Log the config that was actually used at runtime.
     outlog = os.path.join(otherargs.out_dir, 'config_log.toml')
