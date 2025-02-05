@@ -1,0 +1,8 @@
+# Python requirements for Mappraiser
+
+astropy
+mpi4py
+numpy
+scipy
+toast == 3.0.0a28
+traitlets
