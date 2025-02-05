@@ -141,15 +141,18 @@ def estimate_psd(
             )
             import matplotlib.pyplot as plt
 
+            fig, ax = plt.subplots(figsize=(10, 6))
             if popt is not None:
                 pparams = 'sigma={:.1e}, alpha={:.1e}, fk={:.1e}, f0={:.1e}'.format(*popt)
-                plt.title(f'{det_name} - fit: {pparams}')
+                ax.set_title(f'{det_name} - fit: {pparams}')
             else:
-                plt.title(f'{det_name} - fit failed')
-            plt.loglog(f, Pxx, label='periodogram')
-            plt.loglog(freq, psds[i], label='fitted psd')
-            plt.legend()
-            plt.savefig(session_dest / f'{det_name}_psd.png')
+                ax.set_title(f'{det_name} - fit failed')
+            ax.loglog(f, Pxx, label='periodogram')
+            ax.loglog(freq, psds[i], label='fitted psd')
+            ax.legend()
+            fig.savefig(session_dest / f'{det_name}_psd.png')
+            fig.clf()
+
         acc += block_size
     return psds
 
