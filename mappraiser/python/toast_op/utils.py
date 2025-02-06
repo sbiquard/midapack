@@ -174,7 +174,7 @@ def estimate_psd(
             ax.loglog(freq, psds[i], label='fitted psd')
             ax.legend()
             fig.savefig(session_dest / f'{det_name}_psd.png')
-            fig.clf()
+            plt.close(fig)
 
         acc += block_size
     return psds
