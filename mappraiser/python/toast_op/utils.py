@@ -12,11 +12,7 @@ from toast.utils import Logger, memreport
 
 from .. import wrapper as lib
 
-F0_FK_PIVOT = 1e-2
-PSD_FIT_GUESS = [1.0, -1.0, 0.1, 1e-5]
-PSD_FIT_BOUNDS = ([0, -10, F0_FK_PIVOT, 0], [np.inf, 0, np.inf, F0_FK_PIVOT])  # fk > f0
-
-WELCH_SEGMENT_DURATION = 600  # 10 minutes
+WELCH_SEGMENT_DURATION = 300  # 5 minutes
 
 
 def log_time_memory(
@@ -83,6 +79,13 @@ def interpolate_psd(
     return np.power(10.0, interp_psd) - psd_shift
 
 
+def _estimate_net(Pxx):
+    """Use 20% (up to 100) points from the end of the PSD to estimate the NET."""
+    n = len(Pxx)
+    offset = max(n - 100, int(0.8 * n))
+    return np.sqrt(np.mean(Pxx[offset:]))
+
+
 def estimate_psd(
     noise: npt.NDArray[lib.SIGNAL_TYPE],
     block_sizes: npt.NDArray[lib.INDEX_TYPE],
@@ -105,20 +108,40 @@ def estimate_psd(
         tod = noise[acc : acc + block_size]
         f, Pxx = welch(tod, fs=rate, nperseg=nperseg)
         popt = pcov = None
+        # don't use the zero frequency
+        f_ = f[1:]
+        Pxx_ = Pxx[1:]
+        net = _estimate_net(Pxx_)
+        p0 = [
+            net,  # sigma
+            1.0,  # alpha
+            0.1 * f_[-1],  # fknee
+            0,  # f0
+        ]
         try:
+            # bounds:
+            # sigma > 0
+            # 0.1 < alpha < 10
+            # f_lo < fknee < f_hi
+            # 0 < fmin < 0.1 * f_hi
+            bounds = (
+                [0, 0.1, 0.1 * f_[-1], 0],
+                [np.inf, 10, f_[-1], 0.1 * f_[-1]],
+            )
             popt, pcov = curve_fit(
                 _log_model,
-                f[1:],
-                np.log10(Pxx[1:]),
-                p0=PSD_FIT_GUESS,
-                bounds=PSD_FIT_BOUNDS,
+                f_,
+                np.log10(Pxx_),
+                p0=p0,
+                bounds=bounds,
                 x_scale=[1e-5, 1, 1, 1e-2],
                 nan_policy='raise',
             )
         except RuntimeError:
             msg = f'Failed to fit PSD for {obs_name} - {det_name}.'
             warnings.warn(msg, stacklevel=2)
-            psds[i] = _model(freq, *PSD_FIT_GUESS)
+            # flat model at NET value
+            psds[i] = np.full_like(freq, net)
         else:
             psds[i] = _model(freq, *popt)
 
