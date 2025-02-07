@@ -181,11 +181,11 @@ def estimate_psd(
 
 
 def _log_model(x, sigma, alpha, fk, f0):
-    return 2 * np.log10(sigma) + np.log10(1 + ((x + f0) / fk) ** alpha)
+    return 2 * np.log10(sigma) + np.log10(1 + ((x + f0) / fk) ** -alpha)
 
 
 def _model(x, sigma, alpha, fk, f0):
-    return sigma**2 * (1 + ((x + f0) / fk) ** alpha)
+    return sigma**2 * (1 + ((x + f0) / fk) ** -alpha)
 
 
 def psd_to_invntt(psd: npt.NDArray, correlation_length: int) -> npt.NDArray[lib.INVTT_TYPE]:
