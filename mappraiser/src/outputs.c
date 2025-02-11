@@ -38,7 +38,7 @@ void initMappraiserOutputs(MappraiserOutputs *o, int nside, int nnz,
         count += 2;
     }
     if (nnz > 1) {
-        // We have Q and U
+        // We have Q, U and Q x U
         o->mapQ = SAFECALLOC(npix, sizeof *o->mapQ);
         o->mapU = SAFECALLOC(npix, sizeof *o->mapU);
         o->precQQ = SAFECALLOC(npix, sizeof *o->precQQ);
@@ -47,7 +47,7 @@ void initMappraiserOutputs(MappraiserOutputs *o, int nside, int nnz,
         count += 5;
     }
     if (nnz == 3) {
-        // We have cross-terms
+        // We have I x {Q,U} cross-terms
         o->precIQ = SAFECALLOC(npix, sizeof *o->precIQ);
         o->precIU = SAFECALLOC(npix, sizeof *o->precIU);
         count += 2;
@@ -116,13 +116,14 @@ void populateMappraiserOutputs(MappraiserOutputs *o, const double *x,
             o->mapI[hpi] = x[i * nnz];
             o->precII[hpi] = bj_map[i * nnz * nnz];
             break;
-        case 2: // I and Q maps
+        case 2: // Q and U maps
             o->hits[hpi] = lhits[i];
             o->rcond[hpi] = rcond[i];
             o->mapQ[hpi] = x[i * nnz];
             o->mapU[hpi] = x[i * nnz + 1];
             o->precQQ[hpi] = bj_map[i * nnz * nnz];
-            o->precUU[hpi] = bj_map[i * nnz * nnz + 1];
+            o->precQU[hpi] = bj_map[i * nnz * nnz + 1];
+            o->precUU[hpi] = bj_map[i * nnz * nnz + 3];
             break;
         case 3: // I, Q and U maps
             o->hits[hpi] = lhits[i];
