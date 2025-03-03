@@ -1,4 +1,5 @@
 import functools as ft
+import warnings
 from dataclasses import dataclass
 from os.path import commonprefix
 from typing import Any, Literal
@@ -182,6 +183,27 @@ class ObservationData:
         # This means that we assume no correlations between them
         return self.transform_pairs(psds, operation='add')
 
+    def get_detector_levels(self):
+        """Return noise levels for the selected detectors.
+
+        If the noise model is an AnalyticalNoise that provides access to the NETs, we use them.
+        Otherwise, we use the relative detector weights computed by TOAST.
+        """
+        if self.noise_model is None:
+            msg = 'Noise model not provided'
+            raise ValueError(msg)
+        model = self.ob[self.noise_model]
+        try:
+            # We don't care about the unit because only relative values count
+            weights = np.array([model.NET(det).value for det in self.sdets])
+        except AttributeError:
+            msg = 'Noise model does not have a NET method, using detector_weight instead'
+            warnings.warn(msg, stacklevel=2)
+            # TOAST's relative detector weight is proportional to 1 / NET
+            weights = 1 / np.array([model.detector_weight(det).value for det in self.sdets])
+        # Add the weights of the detectors in a pair (no correlations)
+        return self.transform_pairs(weights, operation='add')
+
 
 @dataclass
 class ToastContainer:
@@ -219,10 +241,10 @@ class ToastContainer:
 
     def get_interp_psds(self, fft_size: int, rate: float = 1.0) -> npt.NDArray:
         """Return a 2-d array of interpolated PSDs for the selected detectors"""
-        if self.noise_model is None:
-            msg = 'Noise model not provided'
-            raise ValueError(msg)
         return np.vstack([ob.get_interp_psds(fft_size, rate) for ob in self._obs])
+
+    def get_detector_levels(self) -> npt.NDArray:
+        return np.concatenate([ob.get_detector_levels() for ob in self._obs], axis=None)
 
     def allgather(self, value: Any) -> list[Any]:
         comm = self.data.comm.comm_world

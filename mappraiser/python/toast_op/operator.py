@@ -360,13 +360,17 @@ class MapMaker(ToastOperator):
             invntt.fill(1)
             ntt.fill(1)
         elif self.lagmax == 1:
-            # simply use the variance of each block of the noise data
-            # TODO: if the noise model is provided, use its 'noise weights' instead?
-            acc = 0
-            for i, block_size in enumerate(block_sizes):
-                tod = noise[acc : acc + block_size]
-                invntt[i], ntt[i] = 1 / (v := np.var(tod)), v
-                acc += block_size
+            if self.estimate_psd:
+                # simply use the variance of each block of the noise data
+                acc = 0
+                for i, block_size in enumerate(block_sizes):
+                    tod = noise[acc : acc + block_size]
+                    invntt[i], ntt[i] = 1 / (v := np.var(tod)), v
+                    acc += block_size
+            else:
+                # use an existing Noise model
+                levels = ctnr.get_detector_levels()
+                invntt, ntt = 1 / levels, levels
         else:
             fft_size = max(next_fast_fft_size(block_size) for block_size in block_sizes)
             if self.estimate_psd:
