@@ -31,4 +31,10 @@ def mapmaker_mappraiser(job, otherargs, _runargs, data):
         job_ops.mappraiser.output_dir = otherargs.out_dir
         job_ops.mappraiser.pixel_pointing = job.pixels_final
         job_ops.mappraiser.stokes_weights = job.weights_final
-        job_ops.mappraiser.apply(data)
+
+        # Handle "single det" mode
+        # Works speficically for sotodlib workflows where detectors come in A/B pairs
+        dets = data.all_local_detectors()
+        if otherargs.single_det:
+            dets = filter(lambda x: x.endswith('A'), dets)
+        job_ops.mappraiser.apply(data, detectors=dets)
