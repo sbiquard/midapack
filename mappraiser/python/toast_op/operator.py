@@ -53,6 +53,7 @@ class MapMaker(ToastOperator):
     binned = Bool(False, help='Make a binned map')
     downscale = Int(1, help='Downscale the noise by sqrt of this factor')
     estimate_psd = Bool(False, help='Estimate the noise PSD from the data')
+    bin_psd = Bool(False, help='Bin the noise PSD for fitting')
     estimate_spin_zero = Bool(False, help='When doing pair-diff, still estimate a spin-zero field')
     lagmax = Int(1_000, help='Maximum lag of the correlation function')
     mem_report = Bool(False, help='Print memory reports')
@@ -380,6 +381,7 @@ class MapMaker(ToastOperator):
                     noise,
                     block_sizes,
                     fft_size,
+                    bin_psd=self.bin_psd,
                     obs_names=ctnr.observation_names,
                     det_names=ctnr.detector_names,
                     rate=self.fsample,

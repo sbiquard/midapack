@@ -79,11 +79,48 @@ def interpolate_psd(
     return np.power(10.0, interp_psd) - psd_shift
 
 
-def _estimate_net(Pxx):
-    """Use 20% (up to 100) points from the end of the PSD to estimate the NET."""
-    n = len(Pxx)
-    offset = max(n - 100, int(0.8 * n))
-    return np.sqrt(np.mean(Pxx[offset:]))
+def _estimate_wn(f, pxx, fmin=5, fmax=np.inf):
+    """Use frequencies between fmin and fmax to estimate the white noise level."""
+    return np.sqrt(np.median(pxx[((f > fmin) & (f < fmax))]))
+
+
+def bin_psd(f, pxx):
+    """Bin a periodogram in log space."""
+    bins = np.logspace(np.log10(f[0]), np.log10(f[-1]) + 1e-8, endpoint=True, num=25)
+    digitized = np.digitize(f, bins)
+    with np.errstate(invalid='ignore'):
+        binned_pxx = np.bincount(digitized, weights=pxx) / np.bincount(digitized)
+        binned_f = np.bincount(digitized, weights=f) / np.bincount(digitized)
+    # do not use empty bins
+    return binned_f[~np.isnan(binned_f)], binned_pxx[~np.isnan(binned_pxx)]
+
+
+def _fit_model(f, pxx, *, bin: bool):
+    """Fit a 1/f model to a PSD."""
+    # estimate white noise level before eventual binning
+    p0 = [
+        _estimate_wn(f, pxx),  # sigma
+        1,  # alpha
+        0.1 * f[-1],  # fknee
+        0.01 * f[-1],  # f0
+    ]
+    bounds = (
+        # avoid singularities by using machine precision for lower bounds
+        [0, 0.1, np.finfo(f.dtype).eps, np.finfo(f.dtype).eps],
+        [np.inf, 10, f[-1], f[-1]],
+    )
+
+    if bin:
+        f, pxx = bin_psd(f, pxx)
+
+    return curve_fit(
+        _log_model,
+        f,
+        np.log10(pxx),
+        p0=p0,
+        bounds=bounds,
+        nan_policy='raise',
+    )
 
 
 def estimate_psd(
@@ -91,6 +128,7 @@ def estimate_psd(
     block_sizes: npt.NDArray[lib.INDEX_TYPE],
     fft_size: int,
     *,
+    bin_psd: bool,
     obs_names: list[str],
     det_names: list[str],
     rate: float = 1.0,
@@ -102,46 +140,22 @@ def estimate_psd(
     freq = np.fft.rfftfreq(fft_size, 1 / rate)
     psds = np.empty((block_sizes.size, fft_size // 2 + 1))
     acc = 0
+    failed = np.zeros_like(block_sizes, dtype=bool)
     for i, (block_size, obs_name, det_name) in enumerate(
         zip(block_sizes, obs_names, det_names, strict=True)
     ):
+        # we compute periodograms for each block separately because they can have different sizes
         tod = noise[acc : acc + block_size]
-        f, Pxx = welch(tod, fs=rate, nperseg=nperseg)
+        f, pxx = welch(tod, fs=rate, nperseg=nperseg)
         popt = pcov = None
-        # don't use the zero frequency
-        f_ = f[1:]
-        Pxx_ = Pxx[1:]
-        net = _estimate_net(Pxx_)
-        p0 = [
-            net,  # sigma
-            1.0,  # alpha
-            0.1 * f_[-1],  # fknee
-            0,  # f0
-        ]
         try:
-            # bounds:
-            # sigma > 0
-            # 0.1 < alpha < 10
-            # f_lo < fknee < f_hi
-            # 0 < fmin < 0.1 * f_hi
-            bounds = (
-                [0, 0.1, 0.1 * f_[-1], 0],
-                [np.inf, 10, f_[-1], 0.1 * f_[-1]],
-            )
-            popt, pcov = curve_fit(
-                _log_model,
-                f_,
-                np.log10(Pxx_),
-                p0=p0,
-                bounds=bounds,
-                x_scale=[1e-5, 1, 1, 1e-2],
-                nan_policy='raise',
-            )
+            # do not use zero frequency
+            popt, pcov = _fit_model(f[1:], pxx[1:], bin=bin_psd)
         except RuntimeError:
             msg = f'Failed to fit PSD for {obs_name} - {det_name}.'
             warnings.warn(msg, stacklevel=2)
-            # flat model at NET value
-            psds[i] = np.full_like(freq, net)
+            # mark this block as failed, we'll handle it later
+            failed[i] = True
         else:
             psds[i] = _model(freq, *popt)
 
@@ -157,7 +171,7 @@ def estimate_psd(
                 rate=rate,
                 nperseg=nperseg,
                 f=f,
-                Pxx=Pxx,
+                Pxx=pxx,
                 popt=popt if popt is not None else np.nan,
                 pcov=pcov if pcov is not None else np.nan,
                 fft_size=fft_size,
@@ -170,13 +184,21 @@ def estimate_psd(
                 ax.set_title(f'{det_name} - fit: {pparams}')
             else:
                 ax.set_title(f'{det_name} - fit failed')
-            ax.loglog(f, Pxx, label='periodogram')
+            ax.loglog(f, pxx, label='periodogram')
             ax.loglog(freq, psds[i], label='fitted psd')
             ax.legend()
             fig.savefig(session_dest / f'{det_name}_psd.png')
             plt.close(fig)
 
         acc += block_size
+
+    # Handle failed blocks
+    if np.all(failed):
+        msg = 'all psd fits failed'
+        raise RuntimeError(msg)
+    if np.any(failed):
+        # use the average of the other blocks
+        psds[failed] = np.mean(psds[~failed], axis=0)
     return psds
 
 
