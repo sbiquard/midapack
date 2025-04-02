@@ -73,7 +73,7 @@ class MapMaker(ToastOperator):
     gap_stgy = UseEnum(lib.GapStrategy, help='Strategy for handling timestream gaps')
     maxiter = Int(3000, help='Maximum number of iterations allowed for the solver')
     ortho_alg = Int(1, help='Orthogonalization scheme for ECG (O->odir, 1->omin)')
-    precond = UseEnum(lib.PrecondType, help='Preconditiner choice')
+    precond = UseEnum(lib.PrecondType, help='Preconditioner choice')
     ptcomm_flag = Int(6, help='Choose collective communication scheme')
     realization = Int(0, help='Noise realization index (for gap filling)')
     ref = Unicode('run0', help='Reference that is added to the name of the output maps')
