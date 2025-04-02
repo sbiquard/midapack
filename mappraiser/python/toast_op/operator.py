@@ -8,6 +8,7 @@ import numpy.typing as npt
 import traitlets
 from toast.data import Data as ToastData
 from toast.observation import default_values as defaults
+from toast.ops import GainScrambler
 from toast.ops.operator import Operator as ToastOperator
 from toast.ops.pixels_healpix import PixelsHealpix
 from toast.ops.stokes_weights import StokesWeights
@@ -80,6 +81,13 @@ class MapMaker(ToastOperator):
     solver = UseEnum(lib.SolverType, help='Solver choice')
     tol = Float(1e-12, help='Convergence threshold for the iterative solver')
     z_2lvl = Int(0, help='Size of 2lvl deflation space')
+
+    # Miscellaneous
+    scrambling = Instance(
+        klass=GainScrambler,
+        allow_none=True,
+        help='GainScrambler to perturb the data after noise estimation',
+    )
 
     @traitlets.validate('stokes_weights')
     def _check_stokes_weights(self, proposal):
@@ -264,7 +272,13 @@ class MapMaker(ToastOperator):
         # Inverse noise covariance
         invntt, ntt = self._get_invntt(ctnr, noise, block_sizes)
 
-        # Check that sizes are consistentif n_blocks != block_sizes.size:
+        # Scramble the data if requested and update signal and noise
+        if self.scrambling is not None:
+            self.scrambling.apply(data, detectors=detectors)
+            signal = ctnr.get_signal()
+            noise = ctnr.get_noise() / np.sqrt(self.downscale)
+
+        # Check that sizes are consistent
         if n_blocks != block_sizes.size:
             msg = 'Mismatch in number of blocks and block sizes'
             raise ValueError(msg)

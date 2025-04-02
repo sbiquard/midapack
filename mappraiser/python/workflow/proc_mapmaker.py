@@ -32,6 +32,10 @@ def mapmaker_mappraiser(job, otherargs, _runargs, data):
         job_ops.mappraiser.pixel_pointing = job.pixels_final
         job_ops.mappraiser.stokes_weights = job.weights_final
 
+        if otherargs.scramble_after:
+            # We want to scramble gains after estimating noise
+            job_ops.mappraiser.scrambling = job_ops.gainscrambler
+
         # Handle "single det" mode
         # Works speficically for sotodlib workflows where detectors come in A/B pairs
         dets = None
