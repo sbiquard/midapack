@@ -262,8 +262,13 @@ class MapMaker(ToastOperator):
         detindxs = ctnr.detector_uids
 
         # Signal and noise
+        if self.scrambling is not None:
+            # disable purging momentarily
+            ctnr.purge = False
         signal = ctnr.get_signal()
         noise = ctnr.get_noise() / np.sqrt(self.downscale)
+        # re-enable purging (if requested)
+        ctnr.purge = self.purge_det_data
 
         # Pointing and weights
         pixels = ctnr.get_pointing_indices(self.pixel_pointing)  # pyright: ignore[reportArgumentType]
