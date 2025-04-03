@@ -293,7 +293,7 @@ class ToastContainer:
         # concatenation of fdets for each observation
         return [name for ob in self._obs for name in ob.fdets]
 
-    @ft.cached_property
+    @property
     def _obs(self) -> list[ObservationData]:
         return [
             ObservationData(
