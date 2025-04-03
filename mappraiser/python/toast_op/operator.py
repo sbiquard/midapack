@@ -279,6 +279,7 @@ class MapMaker(ToastOperator):
 
         # Scramble the data if requested and update signal and noise
         if self.scrambling is not None:
+            self.scrambling.enabled = True
             self.scrambling.apply(data, detectors=detectors)
             signal = ctnr.get_signal()
             noise = ctnr.get_noise() / np.sqrt(self.downscale)
