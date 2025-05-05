@@ -21,7 +21,7 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
            int nb_blocks_loc, int *local_blocks_sizes, double sample_rate,
            uint64_t *detindxs, uint64_t *obsindxs, uint64_t *telescopes,
            int nnz, int *pix, double *pixweights, double *signal, double *noise,
-           int lambda, double *inv_tt, double *tt);
+           int lambda, double *inv_tt, double *tt, double rcond_threshold);
 
 #ifdef __cplusplus
 }

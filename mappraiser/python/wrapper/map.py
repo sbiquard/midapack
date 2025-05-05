@@ -61,6 +61,7 @@ _mappraiser.MLmap.argtypes = [  # pyright: ignore[reportOptionalMemberAccess]
     ct.c_int,  # lambda
     npc.ndpointer(dtype=INVTT_TYPE, ndim=1, flags='C_CONTIGUOUS'),  # inv_tt
     npc.ndpointer(dtype=INVTT_TYPE, ndim=1, flags='C_CONTIGUOUS'),  # tt
+    ct.c_double,  # rcond_threshold
 ]
 
 
@@ -124,4 +125,5 @@ def MLmap(
         params['lambda'],
         inv_tt,
         tt,
+        params['rcond_threshold'],
     )

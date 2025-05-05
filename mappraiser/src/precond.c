@@ -364,7 +364,8 @@ void invert_block(double *x, int nb, int lda, int *ipiv) {
  * @return int: amount of degenerate pixels found
  */
 int precondblockjacobilike(Mat *A, Tpltz *Nm1, double *vpixBlock,
-                           double *vpixBlock_inv, double *rcond, int *lhits) {
+                           double *vpixBlock_inv, double *rcond, int *lhits,
+                           double rcond_threshold) {
     // MPI info
     int rank, size;
     MPI_Comm_rank(A->comm, &rank);
@@ -447,7 +448,7 @@ int precondblockjacobilike(Mat *A, Tpltz *Nm1, double *vpixBlock,
         // reciprocal condition number of the block
         double rcond_block = compute_rcond_block(x, nb, lda, ipiv);
 
-        if (rcond_block > 1e-1) {
+        if (rcond_block > rcond_threshold) {
             // The pixel is well enough observed, inverse the preconditioner
             // block. We use LAPACK's dgetri routine which inverts a matrix
             // given its LU decomposition (which we already have because it was
@@ -492,7 +493,8 @@ int precondblockjacobilike(Mat *A, Tpltz *Nm1, double *vpixBlock,
 
 // Complementary BJ routine for extra pixels
 int precond_bj_like_extra(const Mat *A, const Tpltz *Nm1, double *vpixBlock,
-                          double *vpixBlock_inv, double *rcond, int *lhits) {
+                          double *vpixBlock_inv, double *rcond, int *lhits,
+                          double rcond_threshold) {
     // MPI info
     int rank, size;
     MPI_Comm_rank(A->comm, &rank);
@@ -547,7 +549,7 @@ int precond_bj_like_extra(const Mat *A, const Tpltz *Nm1, double *vpixBlock,
         // reciprocal condition number of the block
         double rcond = compute_rcond_block(x, nb, lda, ipiv);
 
-        if (rcond < 1e-1) {
+        if (rcond < rcond_threshold) {
             ++n_ill;
             printf("[proc %d] extra pixel %d is ill-conditioned\n", rank, ipix);
             // FIXME what to do in this case?
@@ -1184,7 +1186,7 @@ void Lanczos_eig(const Mat *A, const WeightMatrix *W, const double *x,
 
 void build_BJinv(Mat *A, Tpltz *Nm1, Mat *BJ_inv, double *rcond, int *lhits,
                  GapStrategy gs, Gap *Gaps, int64_t gif,
-                 int *local_blocks_sizes) {
+                 int *local_blocks_sizes, double rcond_threshold) {
     // MPI info
     int rank;
     MPI_Comm_rank(A->comm, &rank);
@@ -1200,8 +1202,8 @@ void build_BJinv(Mat *A, Tpltz *Nm1, Mat *BJ_inv, double *rcond, int *lhits,
     double *vpixBlock = SAFEMALLOC(sizeof *vpixBlock * n * nnz);
     double *vpixBlock_inv = SAFEMALLOC(sizeof *vpixBlock_inv * n * nnz);
 
-    int nd =
-        precondblockjacobilike(A, Nm1, vpixBlock, vpixBlock_inv, rcond, lhits);
+    int nd = precondblockjacobilike(A, Nm1, vpixBlock, vpixBlock_inv, rcond,
+                                    lhits, rcond_threshold);
 
     // did any of the processes encounter a degenerate pixel
     MPI_Allreduce(MPI_IN_PLACE, &nd, 1, MPI_INT, MPI_MAX, A->comm);
@@ -1281,7 +1283,8 @@ void build_BJinv(Mat *A, Tpltz *Nm1, Mat *BJ_inv, double *rcond, int *lhits,
         }
 
 #if 1
-        precond_bj_like_extra(A, Nm1, vpixBlock, vpixBlock_inv, rcond, lhits);
+        precond_bj_like_extra(A, Nm1, vpixBlock, vpixBlock_inv, rcond, lhits,
+                              rcond_threshold);
 #else
         int n_ill = precond_bj_like_extra(A, Nm1, vpixBlock, vpixBlock_inv,
                                           rcond, lhits);
@@ -1357,13 +1360,13 @@ void build_BJinv(Mat *A, Tpltz *Nm1, Mat *BJ_inv, double *rcond, int *lhits,
 // General routine for constructing a preconditioner
 Precond *newPrecondBJ(Mat *A, Tpltz *Nm1, double *rcond, int *lhits,
                       GapStrategy gs, Gap *Gaps, int64_t gif,
-                      int *local_blocks_sizes) {
+                      int *local_blocks_sizes, double rcond_threshold) {
     // Allocate memory for the preconditioner
     Precond *p = SAFECALLOC(1, sizeof *p);
 
     // Compute BJ preconditioner
     build_BJinv(A, Nm1, &(p->BJ_inv), rcond, lhits, gs, Gaps, gif,
-                local_blocks_sizes);
+                local_blocks_sizes, rcond_threshold);
 
     if (A->flag_ignore_extra) {
         // preconditioner not computed for the extra pixels

@@ -78,6 +78,7 @@ class MapMaker(ToastOperator):
     ptcomm_flag = Int(6, help='Choose collective communication scheme')
     realization = Int(0, help='Noise realization index (for gap filling)')
     ref = Unicode('run0', help='Reference that is added to the name of the output maps')
+    rcond_threshold = Float(1e-1, help='Pixels with rcond below this are cut')
     solver = UseEnum(lib.SolverType, help='Solver choice')
     tol = Float(1e-12, help='Convergence threshold for the iterative solver')
     z_2lvl = Int(0, help='Size of 2lvl deflation space')
@@ -218,6 +219,7 @@ class MapMaker(ToastOperator):
             'ptcomm_flag': self.ptcomm_flag,
             'realization': self.realization,
             'ref': self.ref,
+            'rcond_threshold': self.rcond_threshold,
             'solver': self.solver,
             'tol': self.tol,
             'Z_2lvl': self.z_2lvl,
