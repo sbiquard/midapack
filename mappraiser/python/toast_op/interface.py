@@ -140,9 +140,27 @@ class ObservationData:
         indices = np.array(self.ob.detdata[op.pixels][self.fdets, :], dtype=lib.INDEX_TYPE)
         if self.purge:
             del self.ob.detdata[op.pixels]
-        # Arrange the pixel indices for Mappraiser
+        flags = None
+        if self.det_flags is not None or self.shared_flags is not None:
+            # Doing flags
+            flags = np.zeros_like(indices, dtype=np.uint8)
+            if self.shared_flags is not None:
+                # broadcasting shared flags
+                flags |= self.ob.shared[self.shared_flags][:] & self.shared_flag_mask
+            if self.det_flags is not None:
+                detflags = self.ob.detdata[self.det_flags][self.sdets, :]
+                if self.pair_diff:
+                    # take into account flags for both detectors of the pair!
+                    # (x & m) | (y & m) == (x | y) & m
+                    detflags = detflags[::2] | detflags[1::2]
+                flags |= detflags & self.det_flag_mask
+        # Set pixel indices to -1 if the flag is set
+        if flags is not None:
+            indices[flags != 0] = -1
+        # Repeat the pixel indices for Mappraiser
+        # (np.repeat with axis=None flattens the array)
         indices = np.repeat(indices, nnz := self.nnz) * nnz
-        for i in range(nnz):
+        for i in range(1, nnz):
             indices[i::nnz] += i
         return indices
 
