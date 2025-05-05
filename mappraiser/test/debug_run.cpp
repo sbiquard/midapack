@@ -89,6 +89,7 @@ int main(int argc, char *argv[]) {
     int Nnz = 3;
     int lambda = 8192;
     double sample_rate = 200;
+    double rcond_threshold = 1e-1;
 
     // Command line parser
     argparse::ArgumentParser program("test_run");
@@ -354,7 +355,7 @@ int main(int argc, char *argv[]) {
           nb_blocks_loc, local_blocks_sizes.data(), sample_rate,
           detindxs.data(), obsindxs.data(), telescopes.data(), Nnz, pix.data(),
           pixweights.data(), signal.data(), noise.data(), lambda, inv_tt.data(),
-          tt.data());
+          tt.data(), rcond_threshold);
 #else
     gap_filling(MPI_COMM_WORLD, data_size_proc.data(), nb_blocks_loc,
                 local_blocks_sizes.data(), Nnz, tt.data(), inv_tt.data(),
