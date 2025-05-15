@@ -46,9 +46,9 @@ class MapMaker(ToastOperator):
     # Flagging and masking
     det_mask = Int(defaults.det_mask_nonscience, help='Bit mask value for per-detector flagging')
     det_flag_mask = Int(defaults.det_mask_nonscience, help="Bit mask value for detector sample flagging")  # fmt: skip
-    det_flags = Unicode(defaults.det_flags, help='Observation detdata key for flags to use')
+    det_flags = Unicode(defaults.det_flags, allow_none=True, help='Observation detdata key for flags to use')
     shared_flag_mask = Int(defaults.shared_mask_nonscience, help="Bit mask value for shared flagging")  # fmt: skip
-    shared_flags = Unicode(defaults.shared_flags, help="Observation shared key for telescope flags to use")  # fmt: skip
+    shared_flags = Unicode(defaults.shared_flags, allow_none=True, help="Observation shared key for telescope flags to use")  # fmt: skip
 
     # General configuration
     binned = Bool(False, help='Make a binned map')
