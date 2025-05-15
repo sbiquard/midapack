@@ -36,8 +36,8 @@ class ObservationData:
     det_mask: int = defaults.det_mask_nonscience
     det_flag_mask: int = defaults.det_mask_nonscience
     shared_flag_mask: int = defaults.shared_mask_nonscience
-    det_flags: str = defaults.det_flags
-    shared_flags: str = defaults.shared_flags
+    det_flags: str | None = defaults.det_flags
+    shared_flags: str | None = defaults.shared_flags
 
     def __post_init__(self):
         # Run some checks
@@ -242,8 +242,8 @@ class ToastContainer:
     det_mask: int = defaults.det_mask_nonscience
     det_flag_mask: int = defaults.det_mask_nonscience
     shared_flag_mask: int = defaults.shared_mask_nonscience
-    det_flags: str = defaults.det_flags
-    shared_flags: str = defaults.shared_flags
+    det_flags: str | None = defaults.det_flags
+    shared_flags: str | None = defaults.shared_flags
 
     def get_signal(self) -> npt.NDArray[lib.SIGNAL_TYPE]:
         return np.concatenate([ob.get_signal() for ob in self._obs], axis=None)
