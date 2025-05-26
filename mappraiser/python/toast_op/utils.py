@@ -133,6 +133,7 @@ def estimate_psd(
     det_names: list[str],
     rate: float = 1.0,
     save_dest: Path | None = None,
+    regularization: float = 0.0,
 ) -> npt.NDArray:
     """Estimate the PSD for each block of a noise timestream using Welch's method"""
 
@@ -159,6 +160,8 @@ def estimate_psd(
         else:
             psds[i] = _model(freq, *popt)
 
+        psds[i] += regularization  # regularization term
+
         if save_dest is not None:
             # save information to disk
             # WARNING: this assumes the TOD of a given detector is not shared between processes
@@ -180,14 +183,14 @@ def estimate_psd(
 
             fig, ax = plt.subplots(figsize=(10, 6))
             if popt is not None:
-                pparams = 'sigma={:.1e}, alpha={:.1e}, fk={:.1e}, f0={:.1e}'.format(*popt)
-                ax.set_title(f'{det_name} - fit: {pparams}')
+                pparams = 'sigma={:e}\nalpha={:e}\nfk={:e}\nf0={:.1e}'.format(*popt)
+                ax.set_title(f'{det_name}\n{pparams}\n{regularization=}')
             else:
                 ax.set_title(f'{det_name} - fit failed')
             ax.loglog(f, pxx, label='periodogram')
             ax.loglog(freq, psds[i], label='fitted psd')
             ax.legend()
-            fig.savefig(session_dest / f'{det_name}_psd.png')
+            fig.savefig(session_dest / f'{det_name}_psd.png', bbox_inches='tight')
             plt.close(fig)
 
         acc += block_size
@@ -198,7 +201,7 @@ def estimate_psd(
         raise RuntimeError(msg)
     if np.any(failed):
         # use the average of the other blocks
-        psds[failed] = np.mean(psds[~failed], axis=0)
+        psds[failed] = np.median(psds[~failed], axis=0)
     return psds
 
 

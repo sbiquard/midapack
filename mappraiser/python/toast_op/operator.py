@@ -63,6 +63,7 @@ class MapMaker(ToastOperator):
     pair_diff = Bool(False, help='Process differenced timestreams')
     plot_tod = Bool(False, help='Plot the signal+noise TOD after staging')
     purge_det_data = Bool(True, help='Clear all observation detector data after staging')
+    psd_regularization = Float(0.0, help='Constant value added to the noise PSD for regularization')
     save_fit_info = Bool(False, help='Save fit information when estimating noise PSD')
     zero_noise = Bool(False, help='Fill the noise buffer with zero')
     zero_signal = Bool(False, help='Fill the signal buffer with zero')
@@ -408,6 +409,7 @@ class MapMaker(ToastOperator):
                     det_names=ctnr.detector_names,
                     rate=self.fsample,
                     save_dest=save_dest if self.save_fit_info else None,
+                    regularization=self.psd_regularization,
                 )
             else:
                 # interpolate the PSD from an existing Noise model
