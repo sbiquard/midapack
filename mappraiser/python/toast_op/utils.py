@@ -160,8 +160,6 @@ def estimate_psd(
         else:
             psds[i] = _model(freq, *popt)
 
-        psds[i] += regularization  # regularization term
-
         if save_dest is not None:
             # save information to disk
             # WARNING: this assumes the TOD of a given detector is not shared between processes
@@ -189,10 +187,16 @@ def estimate_psd(
                 ax.set_title(f'{det_name} - fit failed')
             ax.loglog(f, pxx, label='periodogram')
             ax.loglog(freq, psds[i], label='fitted psd')
+            if regularization > 0:
+                ax.loglog(freq, psds[i] + regularization, label='regularized psd')
             ax.legend()
             fig.savefig(session_dest / f'{det_name}_psd.png', bbox_inches='tight')
             plt.close(fig)
 
+        # regularization term
+        psds[i] += regularization
+
+        # go to the next block
         acc += block_size
 
     # Handle failed blocks
