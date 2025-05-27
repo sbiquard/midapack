@@ -57,6 +57,7 @@ class MapMaker(ToastOperator):
     bin_psd = Bool(False, help='Bin the noise PSD for fitting')
     estimate_spin_zero = Bool(False, help='When doing pair-diff, still estimate a spin-zero field')
     lagmax = Int(1_000, help='Maximum lag of the correlation function')
+    median_psd_fit = Bool(False, help='Use median fitted PSD values for all detectors')
     mem_report = Bool(False, help='Print memory reports')
     nside = Int(64, help='HEALPix nside parameter for the output maps')
     output_dir = Unicode('.', help='Write output data products to this directory')
@@ -411,6 +412,9 @@ class MapMaker(ToastOperator):
                     save_dest=save_dest if self.save_fit_info else None,
                     regularization=self.psd_regularization,
                 )
+                if self.median_psd_fit:
+                    # use the median PSD for all detectors
+                    psds = np.median(psds, axis=0, keepdims=True)
             else:
                 # interpolate the PSD from an existing Noise model
                 psds = ctnr.get_interp_psds(fft_size, rate=self.fsample)
