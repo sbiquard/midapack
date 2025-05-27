@@ -414,7 +414,7 @@ class MapMaker(ToastOperator):
                 )
                 if self.median_psd_fit:
                     # use the median PSD for all detectors
-                    psds = np.median(psds, axis=0, keepdims=True)
+                    psds[:] = np.median(psds, axis=0)
             else:
                 # interpolate the PSD from an existing Noise model
                 psds = ctnr.get_interp_psds(fft_size, rate=self.fsample)
