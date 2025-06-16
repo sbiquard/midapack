@@ -43,7 +43,7 @@ _mappraiser.MLmap.argtypes = [  # pyright: ignore[reportOptionalMemberAccess]
     ct.c_int,  # ortho_alg
     ct.c_int,  # bs_red
     ct.c_int,  # nside
-    ct.c_int,  # gap_stgy
+    ct.c_int,  # gap_strategy
     ct.c_bool,  # do_gap_filling
     ct.c_uint64,  # realization
     npc.ndpointer(dtype=INDEX_TYPE, ndim=1, flags='C_CONTIGUOUS'),  # data_size_proc
@@ -107,7 +107,7 @@ def MLmap(
         params['ortho_alg'],
         params['bs_red'],
         params['nside'],
-        params['gap_stgy'],
+        params['gap_strategy'],
         params['fill_gaps'],
         params['realization'],
         data_size_proc,

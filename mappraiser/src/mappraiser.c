@@ -27,7 +27,7 @@
 
 void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
            int Z_2lvl, int pointing_commflag, double tol, int maxiter,
-           int enl_fac, int ortho_alg, int bs_red, int nside, int gap_stgy,
+           int enl_fac, int ortho_alg, int bs_red, int nside, int gap_strategy,
            bool do_gap_filling, uint64_t realization, int *data_size_proc,
            int nb_blocks_loc, int *local_blocks_sizes, double sample_rate,
            uint64_t *detindxs, uint64_t *obsindxs, uint64_t *telescopes,
@@ -81,7 +81,7 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
         fflush(stdout);
     }
 
-    GapStrategy gs = gap_stgy;
+    GapStrategy gs = gap_strategy;
 
     // Set flag to ignore extra pixels when not marginalizing
     A.flag_ignore_extra = !(gs == MARG_LOCAL_SCAN || gs == MARG_PROC);
@@ -92,7 +92,7 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
 
     if (rank == 0) {
         printf("[Gaps] strategy: ");
-        print_gap_stgy(gs);
+        print_gap_strategy(gs);
         fflush(stdout);
     }
 

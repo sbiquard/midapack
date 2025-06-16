@@ -13,7 +13,7 @@ from toast.ops.operator import Operator as ToastOperator
 from toast.ops.pixels_healpix import PixelsHealpix
 from toast.ops.stokes_weights import StokesWeights
 from toast.timing import Timer, function_timer
-from toast.traits import Bool, Float, Instance, Int, Unicode, UseEnum, trait_docs
+from toast.traits import Bool, Float, Instance, Int, Unicode, trait_docs
 from toast.utils import Logger
 
 from .. import wrapper as lib
@@ -73,15 +73,15 @@ class MapMaker(ToastOperator):
     bs_red = Int(0, help='Use dynamic search reduction')
     enl_fac = Int(1, help='Enlargement factor for ECG')
     fill_gaps = Bool(True, help='Perform gap filling on the data')
-    gap_stgy = UseEnum(lib.GapStrategy, help='Strategy for handling timestream gaps')
+    gap_strategy = Int(0, help='Strategy for handling timestream gaps')
     maxiter = Int(3000, help='Maximum number of iterations allowed for the solver')
     ortho_alg = Int(1, help='Orthogonalization scheme for ECG (O->odir, 1->omin)')
-    precond = UseEnum(lib.PrecondType, help='Preconditioner choice')
+    precond = Int(0, help='Preconditioner choice')
     ptcomm_flag = Int(6, help='Choose collective communication scheme')
     realization = Int(0, help='Noise realization index (for gap filling)')
     ref = Unicode('run0', help='Reference that is added to the name of the output maps')
     rcond_threshold = Float(1e-1, help='Pixels with rcond below this are cut')
-    solver = UseEnum(lib.SolverType, help='Solver choice')
+    solver = Int(0, help='Solver choice')
     tol = Float(1e-12, help='Convergence threshold for the iterative solver')
     z_2lvl = Int(0, help='Size of 2lvl deflation space')
 
@@ -91,6 +91,18 @@ class MapMaker(ToastOperator):
         allow_none=True,
         help='GainScrambler to perturb the data after noise estimation',
     )
+
+    @traitlets.validate('gap_strategy')
+    def _check_gap_strategy(self, proposal):
+        return lib.GapStrategy(proposal['value'])
+
+    @traitlets.validate('precond')
+    def _check_precond(self, proposal):
+        return lib.PrecondType(proposal['value'])
+
+    @traitlets.validate('solver')
+    def _check_solver(self, proposal):
+        return lib.SolverType(proposal['value'])
 
     @traitlets.validate('stokes_weights')
     def _check_stokes_weights(self, proposal):
@@ -211,7 +223,7 @@ class MapMaker(ToastOperator):
             'enl_fac': self.enl_fac,
             'fill_gaps': self.fill_gaps,
             'fsample': self.fsample,
-            'gap_stgy': self.gap_stgy,
+            'gap_strategy': self.gap_strategy,
             'lambda': self.lagmax,
             'maxiter': self.maxiter,
             'nside': self.pixel_pointing.nside,  # pyright: ignore[reportAttributeAccessIssue]

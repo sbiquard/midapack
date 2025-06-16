@@ -16,7 +16,7 @@
 #include <mappraiser/mapping.h>
 #include <memutils.h>
 
-void print_gap_stgy(GapStrategy gs) {
+void print_gap_strategy(GapStrategy gs) {
     switch (gs) {
     case COND:
         puts("conditioning");

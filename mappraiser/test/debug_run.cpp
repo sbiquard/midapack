@@ -83,7 +83,7 @@ int main(int argc, char *argv[]) {
     int ortho_alg = 1;
     int bs_red = 0;
     int nside = 512;
-    int gap_stgy;
+    int gap_strategy;
     bool do_gap_filling;
     uint64_t realization = 0;
     int Nnz = 3;
@@ -109,9 +109,9 @@ int main(int argc, char *argv[]) {
         .store_into(pointing_commflag)
         .help("choice of communication pattern for pointing matrix");
 
-    program.add_argument("-gs", "--gap-stgy")
+    program.add_argument("-gs", "--gap-strategy")
         .default_value(0) // default: conditioning
-        .store_into(gap_stgy)
+        .store_into(gap_strategy)
         .help("gap treatment strategy");
 
     program.add_argument("-gf", "--gap-filling")
@@ -129,7 +129,7 @@ int main(int argc, char *argv[]) {
     }
 
     char *outpath = (char *)output_path.c_str();
-    char *ref = (gap_stgy == 0) ? (char *)"cond" : (char *)"marg";
+    char *ref = (gap_strategy == 0) ? (char *)"cond" : (char *)"marg";
 
     // bool to fill noise vector with zeros
     // (--> noiseless run but solver will still iterate)
@@ -351,7 +351,7 @@ int main(int argc, char *argv[]) {
 #if 1
     MLmap(MPI_COMM_WORLD, outpath, ref, solver, precond, Z_2lvl,
           pointing_commflag, tol, maxiter, enl_fac, ortho_alg, bs_red, nside,
-          gap_stgy, do_gap_filling, realization, data_size_proc.data(),
+          gap_strategy, do_gap_filling, realization, data_size_proc.data(),
           nb_blocks_loc, local_blocks_sizes.data(), sample_rate,
           detindxs.data(), obsindxs.data(), telescopes.data(), Nnz, pix.data(),
           pixweights.data(), signal.data(), noise.data(), lambda, inv_tt.data(),

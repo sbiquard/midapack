@@ -33,7 +33,7 @@ typedef enum gap_strategy_t {
     MARG_PROC,
 } GapStrategy;
 
-void print_gap_stgy(GapStrategy gs);
+void print_gap_strategy(GapStrategy gs);
 
 int get_actual_map_size(const Mat *A);
 
