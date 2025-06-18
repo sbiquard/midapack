@@ -59,7 +59,6 @@ class MapMaker(ToastOperator):
     lagmax = Int(1_000, help='Maximum lag of the correlation function')
     median_psd_fit = Bool(False, help='Use median fitted PSD values for all detectors')
     mem_report = Bool(False, help='Print memory reports')
-    nside = Int(64, help='HEALPix nside parameter for the output maps')
     output_dir = Unicode('.', help='Write output data products to this directory')
     pair_diff = Bool(False, help='Process differenced timestreams')
     plot_tod = Bool(False, help='Plot the signal+noise TOD after staging')
@@ -75,6 +74,7 @@ class MapMaker(ToastOperator):
     fill_gaps = Bool(True, help='Perform gap filling on the data')
     gap_strategy = Int(0, help='Strategy for handling timestream gaps')
     maxiter = Int(3000, help='Maximum number of iterations allowed for the solver')
+    mirror = Bool(False, help='Use mirror technique for flagged intervals')
     ortho_alg = Int(1, help='Orthogonalization scheme for ECG (O->odir, 1->omin)')
     precond = Int(0, help='Preconditioner choice')
     ptcomm_flag = Int(6, help='Choose collective communication scheme')
@@ -226,6 +226,7 @@ class MapMaker(ToastOperator):
             'gap_strategy': self.gap_strategy,
             'lambda': self.lagmax,
             'maxiter': self.maxiter,
+            'mirror': self.mirror,
             'nside': self.pixel_pointing.nside,  # pyright: ignore[reportAttributeAccessIssue]
             'ortho_alg': self.ortho_alg,
             'output_dir': self.output_dir,
@@ -255,6 +256,7 @@ class MapMaker(ToastOperator):
             self._nnz,
             self.pair_diff,
             self.purge_det_data,
+            self.mirror,
             det_selection=detectors,
             det_data=self.det_data,
             noise_data=self.noise_data,
@@ -295,8 +297,8 @@ class MapMaker(ToastOperator):
 
         # Scramble the data if requested and update signal and noise
         if self.scrambling is not None:
-            self.scrambling.enabled = True
-            self.scrambling.apply(data, detectors=detectors)
+            self.scrambling.enabled = True  # pyright: ignore[reportAttributeAccessIssue]
+            self.scrambling.apply(data, detectors=detectors)  # pyright: ignore[reportAttributeAccessIssue]
             signal = ctnr.get_signal()
             noise = ctnr.get_noise() / np.sqrt(self.downscale)
 

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from os.path import commonprefix
 from typing import Any, Literal
 
+import healpy as hp
 import numpy as np
 import numpy.typing as npt
 import toast
@@ -135,33 +136,31 @@ class ObservationData:
             del self.ob.detdata[self.noise_data]
         return self.transform_pairs(noise)
 
+    def get_flags(self) -> npt.NDArray[np.uint8]:
+        flags = np.zeros((len(self.fdets), self.samples), dtype=np.uint8)
+        if self.det_flags is None and self.shared_flags is None:
+            # Nothing to do
+            return flags
+
+        # Doing flags
+        if self.shared_flags is not None:
+            # broadcasting shared flags
+            flags |= self.ob.shared[self.shared_flags][:] & self.shared_flag_mask
+        if self.det_flags is not None:
+            detflags = self.ob.detdata[self.det_flags][self.sdets, :]
+            if self.pair_diff:
+                # take into account flags for both detectors of the pair!
+                # (x & m) | (y & m) == (x | y) & m
+                detflags = detflags[::2] | detflags[1::2]
+            flags |= detflags & self.det_flag_mask
+
+        return flags
+
     def get_indices(self, op: PixelsHealpix) -> npt.NDArray[lib.INDEX_TYPE]:
         # When doing pair differencing, we get the indices from the even detectors
         indices = np.array(self.ob.detdata[op.pixels][self.fdets, :], dtype=lib.INDEX_TYPE)
         if self.purge:
             del self.ob.detdata[op.pixels]
-        flags = None
-        if self.det_flags is not None or self.shared_flags is not None:
-            # Doing flags
-            flags = np.zeros_like(indices, dtype=np.uint8)
-            if self.shared_flags is not None:
-                # broadcasting shared flags
-                flags |= self.ob.shared[self.shared_flags][:] & self.shared_flag_mask
-            if self.det_flags is not None:
-                detflags = self.ob.detdata[self.det_flags][self.sdets, :]
-                if self.pair_diff:
-                    # take into account flags for both detectors of the pair!
-                    # (x & m) | (y & m) == (x | y) & m
-                    detflags = detflags[::2] | detflags[1::2]
-                flags |= detflags & self.det_flag_mask
-        # Set pixel indices to -1 if the flag is set
-        if flags is not None:
-            indices[flags != 0] = -1
-        # Repeat the pixel indices for Mappraiser
-        # (np.repeat with axis=None flattens the array)
-        indices = np.repeat(indices, nnz := self.nnz) * nnz
-        for i in range(1, nnz):
-            indices[i::nnz] += i
         return indices
 
     def get_weights(self, op: StokesWeights) -> npt.NDArray[lib.WEIGHT_TYPE]:
@@ -231,6 +230,7 @@ class ToastContainer:
     nnz: int
     pair_diff: bool
     purge: bool
+    mirror: bool
     det_selection: list[str] | None = None
 
     # fields that we want to copy
@@ -252,7 +252,23 @@ class ToastContainer:
         return np.concatenate([ob.get_noise() for ob in self._obs], axis=None)
 
     def get_pointing_indices(self, op: PixelsHealpix) -> npt.NDArray[lib.INDEX_TYPE]:
-        return np.concatenate([ob.get_indices(op) for ob in self._synthesized_obs(op)], axis=None)
+        # Concatenation with axis=None flattens the array
+        indices = np.concatenate([ob.get_indices(op) for ob in self._synthesized_obs(op)], axis=None)
+        flags = np.concatenate([ob.get_flags() for ob in self._obs], axis=None)
+        if self.mirror:
+            # Do not set flagged pixels to -1, but create new pixel indices for mirror pixels
+            npix = hp.nside2npix(op.nside)
+            indices[flags != 0] += npix
+        else:
+            # Set pixel indices to -1 if the flag is set
+            indices[flags != 0] = -1
+
+        # Repeat the pixel indices for Mappraiser
+        indices = np.repeat(indices, nnz := self.nnz) * nnz
+        for i in range(1, nnz):
+            indices[i::nnz] += i
+
+        return indices
 
     def get_pointing_weights(self, op: StokesWeights) -> npt.NDArray[lib.WEIGHT_TYPE]:
         return np.concatenate([ob.get_weights(op) for ob in self._synthesized_obs(op)], axis=None)

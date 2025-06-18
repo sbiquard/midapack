@@ -28,11 +28,12 @@
 void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
            int Z_2lvl, int pointing_commflag, double tol, int maxiter,
            int enl_fac, int ortho_alg, int bs_red, int nside, int gap_strategy,
-           bool do_gap_filling, uint64_t realization, int *data_size_proc,
-           int nb_blocks_loc, int *local_blocks_sizes, double sample_rate,
-           uint64_t *detindxs, uint64_t *obsindxs, uint64_t *telescopes,
-           int nnz, int *pix, double *pixweights, double *signal, double *noise,
-           int lambda, double *inv_tt, double *tt, double rcond_threshold) {
+           bool do_gap_filling, bool mirror, uint64_t realization,
+           int *data_size_proc, int nb_blocks_loc, int *local_blocks_sizes,
+           double sample_rate, uint64_t *detindxs, uint64_t *obsindxs,
+           uint64_t *telescopes, int nnz, int *pix, double *pixweights,
+           double *signal, double *noise, int lambda, double *inv_tt,
+           double *tt, double rcond_threshold) {
     int64_t M;        // global number of rows of the pointing matrix
     int64_t gif;      // global index for the first local line
     int m;            // local number of rows of the pointing matrix
@@ -108,14 +109,25 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
     MPI_Barrier(comm);
     double elapsed = MPI_Wtime() - st;
 
-    nbr_extra_pixels = A.trash_pix * A.nnz;
+    nbr_extra_pixels = A.trash_pix * nnz;
     nbr_valid_pixels = A.lcount - nbr_extra_pixels;
+
+    // Count mirrored pixels
+    int n_mirror = 0;
+    int npix = 12 * nside * nside;
+    for (int c = 0; c < A.lcount; c++) {
+        if (A.lindices[c] >= nnz * npix) {
+            // This is a mirrored pixel
+            n_mirror++;
+        }
+    }
 
     if (rank == 0) {
         printf("Initialized pointing matrix in %lf s\n", elapsed);
-        printf("[proc %d] sky pixels = %d", rank, A.lcount / A.nnz);
-        printf(" (%d valid + %d extra)\n", nbr_valid_pixels / A.nnz,
-               nbr_extra_pixels / A.nnz);
+        printf("[proc %d] sky pixels = %d", rank, A.lcount / nnz);
+        printf(" (%d true + %d mirror + %d extra)\n",
+               (nbr_valid_pixels - n_mirror) / nnz, n_mirror / nnz,
+               nbr_extra_pixels / nnz);
         printf("[proc %d] local timestream gaps = %d\n", rank, Gaps.ngap);
         fflush(stdout);
     }
@@ -389,7 +401,7 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
         int oldsize;
 
         MappraiserOutputs outputs;
-        initMappraiserOutputs(&outputs, nside, nnz, outpath, ref);
+        initMappraiserOutputs(&outputs, nside, nnz, mirror);
 
         for (int proc = 0; proc < world_size; proc++) {
             if (proc != 0) {
@@ -418,15 +430,12 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
         }
 
         // Remove old files before writing new ones
-        puts("Checking output directory... old files will be overwritten");
-        int remove_info = clearFiles(&outputs);
-
-        if (remove_info == 0) {
-            printf("Writing HEALPix maps FITS files to %s...\n", outpath);
-            writeFiles(&outputs);
-        } else {
-            fprintf(stderr, "IO Error: Could not overwrite old files, map "
-                            "results will not be stored ;(\n");
+        printf("Writing HEALPix map files to %s... old files will be "
+               "overwritten\n",
+               outpath);
+        int write_info = writeFiles(&outputs, outpath, ref);
+        if (write_info != 0) {
+            fprintf(stderr, "Error writing output files to %s\n", outpath);
         }
 
         freeMappraiserOutputs(&outputs);

@@ -45,6 +45,7 @@ _mappraiser.MLmap.argtypes = [  # pyright: ignore[reportOptionalMemberAccess]
     ct.c_int,  # nside
     ct.c_int,  # gap_strategy
     ct.c_bool,  # do_gap_filling
+    ct.c_bool,  # mirror
     ct.c_uint64,  # realization
     npc.ndpointer(dtype=INDEX_TYPE, ndim=1, flags='C_CONTIGUOUS'),  # data_size_proc
     ct.c_int,  # nb_blocks_loc
@@ -109,6 +110,7 @@ def MLmap(
         params['nside'],
         params['gap_strategy'],
         params['fill_gaps'],
+        params['mirror'],
         params['realization'],
         data_size_proc,
         len(local_blocks_sizes),

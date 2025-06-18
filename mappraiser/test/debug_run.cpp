@@ -85,6 +85,7 @@ int main(int argc, char *argv[]) {
     int nside = 512;
     int gap_strategy;
     bool do_gap_filling;
+    bool mirror_map = false; // TODO: support this option
     uint64_t realization = 0;
     int Nnz = 3;
     int lambda = 8192;
@@ -351,11 +352,11 @@ int main(int argc, char *argv[]) {
 #if 1
     MLmap(MPI_COMM_WORLD, outpath, ref, solver, precond, Z_2lvl,
           pointing_commflag, tol, maxiter, enl_fac, ortho_alg, bs_red, nside,
-          gap_strategy, do_gap_filling, realization, data_size_proc.data(),
-          nb_blocks_loc, local_blocks_sizes.data(), sample_rate,
-          detindxs.data(), obsindxs.data(), telescopes.data(), Nnz, pix.data(),
-          pixweights.data(), signal.data(), noise.data(), lambda, inv_tt.data(),
-          tt.data(), rcond_threshold);
+          gap_strategy, do_gap_filling, mirror_map, realization,
+          data_size_proc.data(), nb_blocks_loc, local_blocks_sizes.data(),
+          sample_rate, detindxs.data(), obsindxs.data(), telescopes.data(), Nnz,
+          pix.data(), pixweights.data(), signal.data(), noise.data(), lambda,
+          inv_tt.data(), tt.data(), rcond_threshold);
 #else
     gap_filling(MPI_COMM_WORLD, data_size_proc.data(), nb_blocks_loc,
                 local_blocks_sizes.data(), Nnz, tt.data(), inv_tt.data(),
