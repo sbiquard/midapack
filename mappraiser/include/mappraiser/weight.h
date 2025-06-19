@@ -19,6 +19,7 @@ typedef struct {
     Tpltz *N;   // Toeplitz noise covariance
     Gap *G;     // Timestream gaps
     WeightStgy stgy;
+    int nested_maxiter; // max number of iterations for nested solvers
 } WeightMatrix;
 
 // Constructor of WeightStgy given a GapStrategy
@@ -29,9 +30,6 @@ WeightStgy createFromGapStrategy(Gap *Gaps, Mat *A, Tpltz *Nm1, Tpltz *N,
                                  const uint64_t *obsindxs,
                                  const uint64_t *telescopes,
                                  double sample_rate);
-
-// Simple constructor
-WeightMatrix createWeightMatrix(Tpltz *Nm1, Tpltz *N, Gap *G, WeightStgy stgy);
 
 int applyWeightMatrix(const WeightMatrix *W, double *tod);
 

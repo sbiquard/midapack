@@ -28,12 +28,12 @@
 void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
            int Z_2lvl, int pointing_commflag, double tol, int maxiter,
            int enl_fac, int ortho_alg, int bs_red, int nside, int gap_strategy,
-           bool do_gap_filling, bool mirror, uint64_t realization,
-           int *data_size_proc, int nb_blocks_loc, int *local_blocks_sizes,
-           double sample_rate, uint64_t *detindxs, uint64_t *obsindxs,
-           uint64_t *telescopes, int nnz, int *pix, double *pixweights,
-           double *signal, double *noise, int lambda, double *inv_tt,
-           double *tt, double rcond_threshold) {
+           int nested_maxiter, bool do_gap_filling, bool mirror,
+           uint64_t realization, int *data_size_proc, int nb_blocks_loc,
+           int *local_blocks_sizes, double sample_rate, uint64_t *detindxs,
+           uint64_t *obsindxs, uint64_t *telescopes, int nnz, int *pix,
+           double *pixweights, double *signal, double *noise, int lambda,
+           double *inv_tt, double *tt, double rcond_threshold) {
     int64_t M;        // global number of rows of the pointing matrix
     int64_t gif;      // global index for the first local line
     int m;            // local number of rows of the pointing matrix
@@ -243,7 +243,13 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
         detindxs, obsindxs, telescopes, sample_rate);
 
     // final weighting operator
-    WeightMatrix W = createWeightMatrix(&Nm1, &N, &Gaps, ws);
+    WeightMatrix W = {
+        .G = &Gaps,
+        .Nm1 = &Nm1,
+        .N = &N,
+        .stgy = ws,
+        .nested_maxiter = nested_maxiter,
+    };
 
     // ____________________________________________________________
     // Now build the 2lvl part of the preconditioner if needed

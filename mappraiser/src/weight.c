@@ -11,9 +11,9 @@
 #include <assert.h>
 #endif
 
+#include <math.h>
 #include <mpi.h>
 #include <stdbool.h>
-#include <stdlib.h>
 
 #include <mappraiser/gap_filling.h>
 #include <mappraiser/mapping.h>
@@ -197,16 +197,6 @@ WeightStgy createFromGapStrategy(Gap *Gaps, Mat *A, Tpltz *Nm1, Tpltz *N,
     return ws;
 }
 
-WeightMatrix createWeightMatrix(Tpltz *Nm1, Tpltz *N, Gap *G, WeightStgy stgy) {
-    // assume everything already allocated
-    WeightMatrix W;
-    W.Nm1 = Nm1;
-    W.N = N;
-    W.G = G;
-    W.stgy = stgy;
-    return W;
-}
-
 __attribute__((unused)) void reset_tod_gaps(double *tod, Tpltz *N, Gap *Gaps);
 
 void gappy_tpltz_mult(Tpltz *tmat_block, double *tod, Gap *gaps);
@@ -276,10 +266,23 @@ int applyWeightMatrix(const WeightMatrix *W, double *tod) {
     SolverInfo si;
     solverinfo_set_defaults(&si);
 
+    // Single block case is simple
     if (n_blocks == 1) {
         PCG_single_block(W->N, W->Nm1, W->G, tod, NULL, &si, ignore_gaps);
-        return si.n_iter;
+        if (rank == 0) {
+            // print statistics for the single block
+            printf("     | weight matrix solve (single block) (steps: %d, "
+                   "|r|/|r_0|: %e, time: %.4f s\n",
+                   si.n_iter, si.res_norm / si.r0, si.solve_time);
+            fflush(stdout);
+        }
+        return si.n_iter; // return number of iterations for single block
     }
+
+    // For multiple blocks, gather statistics
+    int *iterations = SAFEMALLOC(sizeof(int) * n_blocks);
+    double *times = SAFEMALLOC(sizeof(double) * n_blocks);
+    double *residuals = SAFEMALLOC(sizeof(double) * n_blocks);
 
     // variables for a single toeplitz block
     Block block, block_m1;
@@ -290,15 +293,6 @@ int applyWeightMatrix(const WeightMatrix *W, double *tod) {
         // pick the single Toeplitz block
         block = W->N->tpltzblocks[i];
         block_m1 = W->Nm1->tpltzblocks[i];
-
-        // if (rank == 0)
-        // {
-        //     printf("process toeplitz block %d/%d\n", i,
-        //     (N->nb_blocks_loc) - 1); printf("  block.n = %d\n",
-        //     block.n); printf("  block.idv = %ld\n", block.idv);
-        //     printf("  offset = %d\n", t_id);
-        //     fflush(stdout);
-        // }
 
         // define Tpltz structures for the single block
         set_tpltz_struct(&N_block, W->N, &block);
@@ -311,9 +305,10 @@ int applyWeightMatrix(const WeightMatrix *W, double *tod) {
         PCG_single_block(&N_block, &Nm1_block, W->G, tod_block, NULL, &si,
                          ignore_gaps);
 
-        // do something with solver output
-        //
-        //
+        // Store stats for this block
+        iterations[i] = si.n_iter;
+        times[i] = si.solve_time;
+        residuals[i] = sqrt(si.res_norm / si.r0);
 
         if (si.store_hist)
             solverinfo_free(&si);
@@ -321,6 +316,47 @@ int applyWeightMatrix(const WeightMatrix *W, double *tod) {
         // update our index of local samples
         t_id += block.n;
     }
+
+    // Gather and print statistics
+    double avg_iter = 0.0;
+    double avg_time = 0.0;
+    double avg_residual = 0.0;
+
+    // Calculate sum of local block statistics
+    if (n_blocks > 0) {
+        for (int i = 0; i < n_blocks; i++) {
+            avg_iter += iterations[i];
+            avg_time += times[i];
+            avg_residual += residuals[i];
+        }
+        avg_iter /= n_blocks;
+        avg_time /= n_blocks;
+        avg_residual /= n_blocks;
+    }
+
+    // Gather average statistics from all processes and compute global average
+    MPI_Allreduce(MPI_IN_PLACE, &avg_iter, 1, MPI_DOUBLE, MPI_SUM, W->N->comm);
+    MPI_Allreduce(MPI_IN_PLACE, &avg_time, 1, MPI_DOUBLE, MPI_SUM, W->N->comm);
+    MPI_Allreduce(MPI_IN_PLACE, &avg_residual, 1, MPI_DOUBLE, MPI_SUM,
+                  W->N->comm);
+
+    // Divide by number of processes to get global average
+    avg_iter /= size;
+    avg_time /= size;
+    avg_residual /= size;
+
+    if (rank == 0) {
+        printf("     | weight matrix solve (steps: avg %.1f, |r|/|r_0|: avg "
+               "%e, time: avg %.4f s)\n",
+               avg_iter, avg_residual, avg_time);
+        fflush(stdout);
+    }
+
+    // Clean up
+    FREE(iterations);
+    FREE(times);
+    FREE(residuals);
+
     return 0;
 }
 

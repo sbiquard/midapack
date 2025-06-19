@@ -44,6 +44,7 @@ _mappraiser.MLmap.argtypes = [  # pyright: ignore[reportOptionalMemberAccess]
     ct.c_int,  # bs_red
     ct.c_int,  # nside
     ct.c_int,  # gap_strategy
+    ct.c_int, # nested_maxiter
     ct.c_bool,  # do_gap_filling
     ct.c_bool,  # mirror
     ct.c_uint64,  # realization
@@ -109,6 +110,7 @@ def MLmap(
         params['bs_red'],
         params['nside'],
         params['gap_strategy'],
+        params['nested_maxiter'],
         params['fill_gaps'],
         params['mirror'],
         params['realization'],

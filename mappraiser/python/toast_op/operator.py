@@ -74,6 +74,7 @@ class MapMaker(ToastOperator):
     fill_gaps = Bool(True, help='Perform gap filling on the data')
     gap_strategy = Int(0, help='Strategy for handling timestream gaps')
     maxiter = Int(3000, help='Maximum number of iterations allowed for the solver')
+    nested_maxiter = Int(20, help='Maximum number of iterations for the nested solver')
     mirror = Bool(False, help='Use mirror technique for flagged intervals')
     ortho_alg = Int(1, help='Orthogonalization scheme for ECG (O->odir, 1->omin)')
     precond = Int(0, help='Preconditioner choice')
@@ -226,6 +227,7 @@ class MapMaker(ToastOperator):
             'gap_strategy': self.gap_strategy,
             'lambda': self.lagmax,
             'maxiter': self.maxiter,
+            'nested_maxiter': self.nested_maxiter,
             'mirror': self.mirror,
             'nside': self.pixel_pointing.nside,  # pyright: ignore[reportAttributeAccessIssue]
             'ortho_alg': self.ortho_alg,

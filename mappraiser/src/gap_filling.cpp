@@ -446,7 +446,13 @@ void mappraiser::sim_constrained_noise_block(
     // invert the system N x = (noise - xi)
     mappraiser::system_stopwatch stopwatch;
 
-    WeightMatrix W_block = createWeightMatrix(Nm1_block, N_block, gaps, ITER);
+    WeightMatrix W_block = {
+        .Nm1 = Nm1_block,
+        .N = N_block,
+        .G = gaps,
+        .stgy = ITER,
+        .nested_maxiter = 100,
+    };
     int nb_iterations = applyWeightMatrix(&W_block, rhs.data());
 
     gfi.store_pcg_time(
