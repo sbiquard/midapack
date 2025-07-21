@@ -1,6 +1,7 @@
 import ctypes as ct
 import ctypes.util as ctu
 
+import numpy as np
 import numpy.ctypeslib as npc
 from mpi4py import MPI
 
@@ -8,6 +9,9 @@ from .types import INDEX_TYPE, INVTT_TYPE, META_ID_TYPE, SIGNAL_TYPE, WEIGHT_TYP
 
 __all__ = [
     'MLmap',
+    'remove_baseline',
+    'sim_constrained_block',
+    'sim_noise_tod',
 ]
 
 _mappraiser = None
@@ -28,8 +32,8 @@ MPI_Comm = ct.c_int if MPI._sizeof(MPI.Comm) == ct.sizeof(ct.c_int) else ct.c_vo
 # MLmap routine
 ############################################################
 
-_mappraiser.MLmap.restype = None  # pyright: ignore[reportOptionalMemberAccess]
-_mappraiser.MLmap.argtypes = [  # pyright: ignore[reportOptionalMemberAccess]
+_mappraiser.MLmap.restype = None
+_mappraiser.MLmap.argtypes = [
     MPI_Comm,  # comm
     ct.c_char_p,  # outpath
     ct.c_char_p,  # ref
@@ -44,7 +48,7 @@ _mappraiser.MLmap.argtypes = [  # pyright: ignore[reportOptionalMemberAccess]
     ct.c_int,  # bs_red
     ct.c_int,  # nside
     ct.c_int,  # gap_strategy
-    ct.c_int, # nested_maxiter
+    ct.c_int,  # nested_maxiter
     ct.c_bool,  # do_gap_filling
     ct.c_bool,  # mirror
     ct.c_uint64,  # realization
@@ -95,7 +99,7 @@ def MLmap(
     # https://github.com/mpi4py/mpi4py/blob/master/demo/wrap-ctypes/helloworld.py
     comm_c = MPI_Comm(comm.handle)
 
-    _mappraiser.MLmap(  # pyright: ignore[reportOptionalMemberAccess]
+    _mappraiser.MLmap(
         comm_c,
         outpath,
         ref,
@@ -130,4 +134,148 @@ def MLmap(
         inv_tt,
         tt,
         params['rcond_threshold'],
+    )
+
+
+############################################################
+# Timestream generation routine
+############################################################
+
+_mappraiser.sim_noise_tod.restype = None
+_mappraiser.sim_noise_tod.argtypes = [
+    ct.c_int,  # samples
+    ct.c_int,  # lambda
+    npc.ndpointer(dtype=np.double, ndim=1, flags='C_CONTIGUOUS'),  # tt
+    npc.ndpointer(dtype=np.double, ndim=1, flags='C_CONTIGUOUS'),  # buf
+    ct.c_uint64,  # realization
+    ct.c_uint64,  # detindx
+    ct.c_uint64,  # obsindx
+    ct.c_uint64,  # telescope
+    ct.c_double,  # sample_rate
+]
+
+
+def sim_noise_tod(
+    samples,
+    lambda_,
+    tt,
+    buf,
+    realization,
+    detindx,
+    obsindx,
+    telescope,
+    sample_rate,
+):
+    if _mappraiser is None:
+        msg = 'No libmappraiser available, cannot reconstruct the map'
+        raise RuntimeError(msg)
+
+    _mappraiser.sim_noise_tod(
+        samples,
+        lambda_,
+        tt,
+        buf,
+        realization,
+        detindx,
+        obsindx,
+        telescope,
+        sample_rate,
+    )
+
+
+############################################################
+# Baseline computation routine
+############################################################
+
+_mappraiser.remove_baseline.restype = None
+_mappraiser.remove_baseline.argtypes = [
+    ct.c_int,  # samples
+    npc.ndpointer(dtype=np.double, ndim=1, flags='C_CONTIGUOUS'),  # buf
+    npc.ndpointer(dtype=np.double, ndim=1, flags='C_CONTIGUOUS'),  # baseline
+    npc.ndpointer(dtype=np.uint8, ndim=1, flags='C_CONTIGUOUS'),  # valid
+    ct.c_int,  # w0
+    ct.c_bool,  # rm
+]
+
+
+def remove_baseline(
+    samples,
+    buf,
+    baseline,
+    valid,
+    w0,
+    rm,
+):
+    if _mappraiser is None:
+        msg = 'No libmappraiser available, cannot reconstruct the map'
+        raise RuntimeError(msg)
+
+    _mappraiser.remove_baseline(
+        samples,
+        buf,
+        baseline,
+        valid,
+        w0,
+        rm,
+    )
+
+
+############################################################
+# Single block constrained realization
+############################################################
+
+_mappraiser.sim_constrained_block.restype = None
+_mappraiser.sim_constrained_block.argtypes = [
+    ct.c_bool,
+    ct.c_bool,
+    ct.c_int,  # samples
+    ct.c_int,  # lambda
+    ct.c_int,  # w0
+    npc.ndpointer(dtype=SIGNAL_TYPE, ndim=1, flags='C_CONTIGUOUS'),  # tt
+    npc.ndpointer(dtype=SIGNAL_TYPE, ndim=1, flags='C_CONTIGUOUS'),  # inv_tt
+    npc.ndpointer(dtype=SIGNAL_TYPE, ndim=1, flags='C_CONTIGUOUS'),  # noise
+    npc.ndpointer(dtype=INDEX_TYPE, ndim=1, flags='C_CONTIGUOUS'),  # pix
+    ct.c_uint64,  # realization
+    ct.c_uint64,  # detindx
+    ct.c_uint64,  # obsindx
+    ct.c_uint64,  # telescope
+    ct.c_double,  # sample_rate
+]
+
+
+def sim_constrained_block(
+    init,
+    finalize,
+    samples,
+    lambda_,
+    w0,
+    tt,
+    inv_tt,
+    noise,
+    pix,
+    realization,
+    detindx,
+    obsindx,
+    telescope,
+    sample_rate,
+):
+    if _mappraiser is None:
+        msg = 'No libmappraiser available, cannot reconstruct the map'
+        raise RuntimeError(msg)
+
+    _mappraiser.sim_constrained_block(
+        init,
+        finalize,
+        samples,
+        lambda_,
+        w0,
+        tt,
+        inv_tt,
+        noise,
+        pix,
+        realization,
+        detindx,
+        obsindx,
+        telescope,
+        sample_rate,
     )

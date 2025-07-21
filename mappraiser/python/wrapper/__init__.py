@@ -2,7 +2,7 @@
 This package contains the wrapper around the Mappraiser C library.
 """
 
-from .map import MLmap
+from .map import MLmap, remove_baseline, sim_constrained_block, sim_noise_tod
 from .types import (
     INDEX_TYPE,
     INVTT_TYPE,
@@ -28,4 +28,7 @@ __all__ = [
     'SolverType',
     # "TIMESTAMP_TYPE",
     # "PSD_TYPE",
+    'remove_baseline',
+    'sim_constrained_block',
+    'sim_noise_tod',
 ]
