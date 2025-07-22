@@ -309,7 +309,7 @@ void sim_noise_tod(int samples, int lambda, const double *tt, double *buf,
     int npsd = (fftlen / 2) + 1;
 
     // Normalization
-    double norm = sample_rate * static_cast<double>(npsd - 1);
+    double norm = sample_rate * static_cast<double>(npsd - 1) / 2;
 
     // FFTW variables
     double *tdata;
