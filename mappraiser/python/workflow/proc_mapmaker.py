@@ -40,6 +40,6 @@ def mapmaker_mappraiser(job, otherargs, _runargs, data):
         # Handle "single det" mode
         # Works speficically for sotodlib workflows where detectors come in A/B pairs
         dets = None
-        if otherargs.single_det:
+        if getattr(otherargs, 'single_det', None):
             dets = [d for d in data.all_local_detectors() if d.endswith('A')]
         job_ops.mappraiser.apply(data, detectors=dets)
