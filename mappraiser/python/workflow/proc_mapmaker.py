@@ -1,7 +1,8 @@
 """Mapmaking with the MAPPRAISER framework."""
 
-from mappraiser.toast_op import operator as mappraiser_op
 from sotodlib.toast.workflows.job import workflow_timer
+
+from mappraiser.toast_op import operator as mappraiser_op
 
 
 def setup_mapmaker_mappraiser(_parser, operators):
@@ -32,7 +33,7 @@ def mapmaker_mappraiser(job, otherargs, _runargs, data):
         job_ops.mappraiser.pixel_pointing = job.pixels_final
         job_ops.mappraiser.stokes_weights = job.weights_final
 
-        if otherargs.scramble_after:
+        if getattr(otherargs, 'scramble_after', None):
             # We want to scramble gains after estimating noise
             job_ops.mappraiser.scrambling = job_ops.gainscrambler
 
