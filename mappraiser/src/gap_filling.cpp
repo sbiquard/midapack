@@ -417,11 +417,11 @@ void mappraiser::sim_constrained_noise_block(
 #if 0
     mappraiser::system_stopwatch baseline_watch;
 #endif
-    std::vector<double> baseline(samples);
-    if (w0 < 0)
-        w0 = lambda / 2;
-    remove_baseline(samples, rhs.data(), baseline.data(), valid.data(), w0,
-                    true);
+    // std::vector<double> baseline(samples);
+    // if (w0 < 0)
+    //     w0 = lambda / 2;
+    // remove_baseline(samples, rhs.data(), baseline.data(), valid.data(), w0,
+    //                 true);
 #if 0
     if (gfi.id == 0) {
         double milliseconds =
@@ -480,16 +480,17 @@ void mappraiser::sim_constrained_noise_block(
     std::copy(rhs.begin(), rhs.end(), constrained.begin());
     stbmmProd(N_block, constrained.data());
 
-#pragma omp parallel for default(none)                                         \
-    shared(samples, valid, baseline, xi, constrained) schedule(static)
+#pragma omp parallel for default(none) shared(samples, valid, xi, constrained) \
+    schedule(static)
     for (int i = 0; i < samples; ++i) {
-        if (valid[i]) {
-            // add the baseline back
-            constrained[i] += xi[i] + baseline[i];
-        } else {
-            constrained[i] += xi[i];
-            // constrained[i] += xi[i] + baseline[i];
-        }
+        // if (valid[i]) {
+        //     // add the baseline back
+        //     constrained[i] += xi[i] + baseline[i];
+        // } else {
+        //     constrained[i] += xi[i];
+        //     // constrained[i] += xi[i] + baseline[i];
+        // }
+        constrained[i] += xi[i];
     }
 
     // TODO check quality of constrained realization against original vector?
