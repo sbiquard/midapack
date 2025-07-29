@@ -265,6 +265,7 @@ int applyWeightMatrix(const WeightMatrix *W, double *tod) {
     // create a SolverInfo structure for the solver parameters and output
     SolverInfo si;
     solverinfo_set_defaults(&si);
+    si.max_steps = W->maxiter; // max number of iterations
 
     // Single block case is simple
     if (n_blocks == 1) {

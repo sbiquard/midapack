@@ -451,7 +451,7 @@ void mappraiser::sim_constrained_noise_block(
         .N = N_block,
         .G = gaps,
         .stgy = ITER,
-        .nested_maxiter = 100,
+        .maxiter = 300,
     };
     int nb_iterations = applyWeightMatrix(&W_block, rhs.data());
 

@@ -19,7 +19,7 @@ typedef struct {
     Tpltz *N;   // Toeplitz noise covariance
     Gap *G;     // Timestream gaps
     WeightStgy stgy;
-    int nested_maxiter; // max number of iterations for nested solvers
+    int maxiter; // max number of iterations for nested solvers
 } WeightMatrix;
 
 // Constructor of WeightStgy given a GapStrategy

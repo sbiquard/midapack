@@ -248,7 +248,7 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
         .Nm1 = &Nm1,
         .N = &N,
         .stgy = ws,
-        .nested_maxiter = nested_maxiter,
+        .maxiter = nested_maxiter,
     };
 
     // ____________________________________________________________
