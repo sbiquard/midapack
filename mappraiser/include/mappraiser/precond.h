@@ -32,7 +32,8 @@ typedef struct precond_t {
 // Preconditioner constructor (Block Jacobi)
 Precond *newPrecondBJ(Mat *A, Tpltz *Nm1, double *rcond, int *lhits,
                       GapStrategy gs, Gap *Gaps, int64_t gif,
-                      int *local_blocks_sizes, double rcond_threshold);
+                      int *local_blocks_sizes, double rcond_threshold,
+                      int nside);
 
 // 2lvl constructor
 // to be called after getting the Block Jacobi from the previous factory

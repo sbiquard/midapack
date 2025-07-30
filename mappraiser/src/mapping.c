@@ -125,11 +125,7 @@ int create_extra_pix(int *indices, double *weights, int nnz, int nb_blocks_loc,
  * @param A the pointing matrix structure
  * @return int the number of timestream gaps found
  */
-int build_pixel_to_time_domain_mapping(Mat *A) {
-    int i, j;
-    int ipix;
-    int ngap, lengap;
-
+int build_pixel_to_time_domain_mapping(Mat *A, int nside) {
     // index of last sample pointing to each pixel
     A->id_last_pix = SAFEMALLOC(sizeof A->id_last_pix * A->lcount / A->nnz);
 
@@ -137,19 +133,19 @@ int build_pixel_to_time_domain_mapping(Mat *A) {
     A->ll = SAFEMALLOC(sizeof A->ll * A->m);
 
     // initialize the mapping arrays to -1
-    for (i = 0; i < A->m; i++) {
+    for (int i = 0; i < A->m; i++) {
         A->ll[i] = -1;
     }
-    for (j = 0; j < A->lcount / A->nnz; j++) {
+    for (int j = 0; j < A->lcount / A->nnz; j++) {
         A->id_last_pix[j] = -1;
     }
 
     // build the linked list chain of time samples corresponding to each pixel
     // and compute number of timestream gaps
-    ngap = 0;
-    lengap = 0;
-    for (i = 0; i < A->m; i++) {
-        ipix = A->indices[i * A->nnz] / A->nnz;
+    int ngap = 0, lengap = 0;
+    for (int i = 0; i < A->m; i++) {
+        int pix = A->indices[i * A->nnz];
+        int ipix = pix / A->nnz;
         if (A->id_last_pix[ipix] == -1) {
             A->id_last_pix[ipix] = i;
         } else {
@@ -157,13 +153,10 @@ int build_pixel_to_time_domain_mapping(Mat *A) {
             A->id_last_pix[ipix] = i;
         }
 
-        if (A->trash_pix == 0) {
-            // skip the computation of ngap
-            continue;
-        }
-
         // compute the number of gaps in the timestream
-        if (A->indices[i * A->nnz] >= A->trash_pix * A->nnz) {
+        bool is_trash = (pix < A->trash_pix * A->nnz);
+        bool is_mirrored = nside > 0 && (pix >= nside * nside * 12 * A->nnz);
+        if (!is_trash && !is_mirrored) {
             // valid sample: reset gap length
             lengap = 0;
         } else {

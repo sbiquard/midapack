@@ -23,13 +23,8 @@ typedef struct {
 } WeightMatrix;
 
 // Constructor of WeightStgy given a GapStrategy
-WeightStgy createFromGapStrategy(Gap *Gaps, Mat *A, Tpltz *Nm1, Tpltz *N,
-                                 GapStrategy gs, double *b, const double *noise,
-                                 bool do_gap_filling, uint64_t realization,
-                                 const uint64_t *detindxs,
-                                 const uint64_t *obsindxs,
-                                 const uint64_t *telescopes,
-                                 double sample_rate);
+WeightStgy createFromGapStrategy(MPI_Comm comm, GapStrategy gs,
+                                 bool do_gap_filling);
 
 int applyWeightMatrix(const WeightMatrix *W, double *tod);
 

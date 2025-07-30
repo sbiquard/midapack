@@ -1186,7 +1186,7 @@ void Lanczos_eig(const Mat *A, const WeightMatrix *W, const double *x,
 
 void build_BJinv(Mat *A, Tpltz *Nm1, Mat *BJ_inv, double *rcond, int *lhits,
                  GapStrategy gs, Gap *Gaps, int64_t gif,
-                 int *local_blocks_sizes, double rcond_threshold) {
+                 int *local_blocks_sizes, double rcond_threshold, int nside) {
     // MPI info
     int rank;
     MPI_Comm_rank(A->comm, &rank);
@@ -1240,7 +1240,7 @@ void build_BJinv(Mat *A, Tpltz *Nm1, Mat *BJ_inv, double *rcond, int *lhits,
         // rebuild the pixel to time-domain mapping
         FREE(A->ll);
         FREE(A->id_last_pix);
-        Gaps->ngap = build_pixel_to_time_domain_mapping(A);
+        Gaps->ngap = build_pixel_to_time_domain_mapping(A, nside);
 
         MPI_Barrier(A->comm);
         if (rank == 0) {
@@ -1360,13 +1360,14 @@ void build_BJinv(Mat *A, Tpltz *Nm1, Mat *BJ_inv, double *rcond, int *lhits,
 // General routine for constructing a preconditioner
 Precond *newPrecondBJ(Mat *A, Tpltz *Nm1, double *rcond, int *lhits,
                       GapStrategy gs, Gap *Gaps, int64_t gif,
-                      int *local_blocks_sizes, double rcond_threshold) {
+                      int *local_blocks_sizes, double rcond_threshold,
+                      int nside) {
     // Allocate memory for the preconditioner
     Precond *p = SAFECALLOC(1, sizeof *p);
 
     // Compute BJ preconditioner
     build_BJinv(A, Nm1, &(p->BJ_inv), rcond, lhits, gs, Gaps, gif,
-                local_blocks_sizes, rcond_threshold);
+                local_blocks_sizes, rcond_threshold, nside);
 
     if (A->flag_ignore_extra) {
         // preconditioner not computed for the extra pixels

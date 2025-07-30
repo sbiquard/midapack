@@ -42,7 +42,7 @@ int get_valid_map_size(const Mat *A);
 int create_extra_pix(int *indices, double *weights, int nnz, int nb_blocks_loc,
                      const int *local_blocks_sizes, GapStrategy gs);
 
-int build_pixel_to_time_domain_mapping(Mat *A);
+int build_pixel_to_time_domain_mapping(Mat *A, int nside);
 
 void build_gap_struct(int64_t gif, Gap *gaps, Mat *A);
 

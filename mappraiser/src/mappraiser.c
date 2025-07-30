@@ -104,7 +104,7 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
     double st = MPI_Wtime();
 
     MatInit(&A, m, nnz, pix, pixweights, pointing_commflag, comm);
-    Gaps.ngap = build_pixel_to_time_domain_mapping(&A);
+    Gaps.ngap = build_pixel_to_time_domain_mapping(&A, nside);
 
     MPI_Barrier(comm);
     double elapsed = MPI_Wtime() - st;
@@ -204,7 +204,7 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
 
     // first build the BJ preconditioner
     Precond *P = newPrecondBJ(&A, &Nm1, rcond, lhits, gs, &Gaps, gif,
-                              local_blocks_sizes, rcond_threshold);
+                              local_blocks_sizes, rcond_threshold, nside);
 
     // Allocate memory for the map with the right number of pixels
     x = SAFECALLOC(P->n, sizeof *x);
@@ -238,11 +238,29 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
         fflush(stdout);
     }
 
-    WeightStgy ws = createFromGapStrategy(
-        &Gaps, &A, &Nm1, &N, gs, signal, noise, do_gap_filling, realization,
-        detindxs, obsindxs, telescopes, sample_rate);
+    // Copy gap information from Nm1 to N
+    compute_gaps_per_block(&Gaps, Nm1.nb_blocks_loc, Nm1.tpltzblocks);
+    copy_gap_info(Nm1.nb_blocks_loc, Nm1.tpltzblocks, N.tpltzblocks);
 
-    // final weighting operator
+    // When not doing gap-filling, set signal in the gaps to zero
+    if (!do_gap_filling) {
+        reset_relevant_gaps(signal, &Nm1, &Gaps);
+    }
+
+    // Recombine signal and noise
+    for (int i = 0; i < A.m; ++i) {
+        signal[i] += noise[i];
+    }
+
+    // Perform gap-filling if needed
+    if (do_gap_filling) {
+        perform_gap_filling(A.comm, &N, &Nm1, signal, &Gaps, realization,
+                            detindxs, obsindxs, telescopes, sample_rate, true);
+    }
+
+    WeightStgy ws = createFromGapStrategy(A.comm, gs, do_gap_filling);
+
+    // Final weighting operator
     WeightMatrix W = {
         .G = &Gaps,
         .Nm1 = &Nm1,
