@@ -117,7 +117,7 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
         printf("Initialized pointing matrix in %lf s\n", elapsed);
         printf("[proc %d] sky pixels = %d", rank, A.lcount / nnz);
         printf(" (%d true + %d mirror + %d extra)\n",
-               (nbr_valid_pixels - n_mirror) / nnz, n_mirror / nnz,
+               nbr_valid_pixels / nnz - n_mirror, n_mirror,
                nbr_extra_pixels / nnz);
         printf("[proc %d] local timestream gaps = %d\n", rank, Gaps.ngap);
         fflush(stdout);

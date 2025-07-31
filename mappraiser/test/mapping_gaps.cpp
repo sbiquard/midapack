@@ -98,7 +98,7 @@ int test_time_domain_mapping(bool verbose = false) {
     Gap G;
     G.ngap = build_pixel_to_time_domain_mapping(&P, -1);
 
-    build_gap_struct(0, &G, &P);
+    build_gap_struct(0, &G, &P, -1);
 
     if (verbose)
         print_gap_info(&G);

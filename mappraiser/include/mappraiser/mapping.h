@@ -46,7 +46,7 @@ int build_pixel_to_time_domain_mapping(Mat *A, int nside);
 
 int get_mirror_pixels_count(Mat *A, int nside);
 
-void build_gap_struct(int64_t gif, Gap *gaps, Mat *A);
+void build_gap_struct(int64_t gif, Gap *gaps, Mat *A, int nside);
 
 void compute_gaps_per_block(Gap *gaps, int nb_blocks, Block *blocks);
 

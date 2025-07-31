@@ -674,7 +674,7 @@ void gap_filling(MPI_Comm comm, const int *data_size_proc, int nb_blocks_loc,
 
     G.ngap = build_pixel_to_time_domain_mapping(&A, -1);
 
-    build_gap_struct(gif, &G, &A);
+    build_gap_struct(gif, &G, &A, -1);
 
     free(A.id_last_pix);
     free(A.ll);
@@ -791,7 +791,7 @@ void sim_constrained_block(bool init, bool finalize, int samples, int lambda,
 
     G.ngap = build_pixel_to_time_domain_mapping(&A, -1);
 
-    build_gap_struct(gif, &G, &A);
+    build_gap_struct(gif, &G, &A, -1);
 
     free(A.id_last_pix);
     free(A.ll);

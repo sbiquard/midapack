@@ -183,7 +183,7 @@ int get_mirror_pixels_count(Mat *A, int nside) {
             n_mirror++;
         }
     }
-    return n_mirror;
+    return n_mirror / A->nnz;
 }
 
 int argmax(const int *array, int size) {
@@ -204,7 +204,7 @@ int argmax(const int *array, int size) {
  * @param gaps Gap structure (Gaps->ngap must already be computed!)
  * @param A pointing matrix structure
  */
-void build_gap_struct(int64_t gif, Gap *gaps, Mat *A) {
+void build_gap_struct(int64_t gif, Gap *gaps, Mat *A, int nside) {
     // allocate the arrays
     gaps->id0gap = SAFEMALLOC(sizeof gaps->id0gap * gaps->ngap);
     gaps->lgap = SAFEMALLOC(sizeof gaps->lgap * gaps->ngap);
@@ -212,28 +212,36 @@ void build_gap_struct(int64_t gif, Gap *gaps, Mat *A) {
     if (gaps->ngap == 0)
         return;
 
-    // follow linked time samples for all extra pixels simultaneously
-    int *tab_j = SAFEMALLOC(sizeof tab_j * A->trash_pix);
+    // follow linked time samples for all extra+mirror pixels simultaneously
+    int n_mirror = get_mirror_pixels_count(A, nside);
+    int n_bad = A->trash_pix + n_mirror;
+    int *current_positions = SAFEMALLOC(sizeof current_positions * n_bad);
 
-    // initialize with the last sample pointing to each extra pixel
+    // initialize with the last sample pointing to each bad pixel
+    // extra pixels are at the beginning of id_last_pix...
     for (int p = 0; p < A->trash_pix; p++) {
-        tab_j[p] = A->id_last_pix[p];
+        current_positions[p] = A->id_last_pix[p];
+    }
+    // mirror pixels are at the end...
+    for (int p = 0; p < n_mirror; p++) {
+        current_positions[A->trash_pix + p] =
+            A->id_last_pix[A->lcount / A->nnz - n_mirror + p];
     }
 
-    // current index in the tab_j array
-    int pj = argmax(tab_j, A->trash_pix);
+    // current position in the time stream
+    int pj = argmax(current_positions, n_bad);
 
-    int i = gaps->ngap - 1; // index of the gap being computed
-    int lengap = 1;         // length of the current gap
-    int j = tab_j[pj];      // index to go through linked time samples
-    int gap_start = j;      // index of the first sample of the gap
+    int i = gaps->ngap - 1;        // index of the gap being computed
+    int lengap = 1;                // length of the current gap
+    int j = current_positions[pj]; // index to go through linked time samples
+    int gap_start = j;             // index of the first sample of the gap
 
     // go through the time samples
     while (j != -1) {
         // go to previous flagged sample
-        tab_j[pj] = A->ll[tab_j[pj]];
-        pj = argmax(tab_j, A->trash_pix);
-        j = tab_j[pj];
+        current_positions[pj] = A->ll[current_positions[pj]];
+        pj = argmax(current_positions, n_bad);
+        j = current_positions[pj];
 
         if (j != -1 && gap_start - j == 1) {
             // same gap, and there are flagged samples left
@@ -248,7 +256,7 @@ void build_gap_struct(int64_t gif, Gap *gaps, Mat *A) {
         gap_start = j;
     }
 
-    FREE(tab_j);
+    FREE(current_positions);
 }
 
 bool gap_overlaps_with_block(Gap *gaps, int i_gap, Block *block) {

@@ -1304,7 +1304,7 @@ void build_BJinv(Mat *A, Tpltz *Nm1, Mat *BJ_inv, double *rcond, int *lhits,
     t = MPI_Wtime();
 
     // build definitive Gap structure
-    build_gap_struct(gif, Gaps, A);
+    build_gap_struct(gif, Gaps, A, nside);
 
     int global_gap_count = compute_global_gap_count(A->comm, Gaps);
 
