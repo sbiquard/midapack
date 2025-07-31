@@ -26,7 +26,7 @@ WeightStgy createFromGapStrategy(MPI_Comm comm, GapStrategy gs,
     int my_rank;
     MPI_Comm_rank(comm, &my_rank);
 
-    WeightStgy ws;
+    WeightStgy ws = BASIC;
 
     switch (gs) {
 
@@ -34,7 +34,6 @@ WeightStgy createFromGapStrategy(MPI_Comm comm, GapStrategy gs,
     case MARG_LOCAL_SCAN:
     case MARG_PROC:
         // Basic weighting strategy (~assume gaps have been filled)
-        ws = BASIC;
         if (my_rank == 0) {
             puts("[Gaps] weighting strategy = BASIC");
             if (!do_gap_filling)
