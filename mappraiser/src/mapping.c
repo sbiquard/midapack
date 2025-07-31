@@ -154,8 +154,11 @@ int build_pixel_to_time_domain_mapping(Mat *A, int nside) {
         }
 
         // compute the number of gaps in the timestream
+        // for this we need the true pixel number
+        int true_pix = A->lindices[ipix];
         bool is_trash = (pix < A->trash_pix * A->nnz);
-        bool is_mirrored = nside > 0 && (pix >= nside * nside * 12 * A->nnz);
+        bool is_mirrored =
+            nside > 0 && (true_pix >= nside * nside * 12 * A->nnz);
         if (!is_trash && !is_mirrored) {
             // valid sample: reset gap length
             lengap = 0;

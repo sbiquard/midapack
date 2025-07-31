@@ -84,6 +84,7 @@ int main(int argc, char *argv[]) {
     int bs_red = 0;
     int nside = 512;
     int gap_strategy;
+    int nested_maxiter = 10;
     bool do_gap_filling;
     bool mirror_map = false; // TODO: support this option
     uint64_t realization = 0;
@@ -352,7 +353,7 @@ int main(int argc, char *argv[]) {
 #if 1
     MLmap(MPI_COMM_WORLD, outpath, ref, solver, precond, Z_2lvl,
           pointing_commflag, tol, maxiter, enl_fac, ortho_alg, bs_red, nside,
-          gap_strategy, do_gap_filling, mirror_map, realization,
+          gap_strategy, nested_maxiter, do_gap_filling, mirror_map, realization,
           data_size_proc.data(), nb_blocks_loc, local_blocks_sizes.data(),
           sample_rate, detindxs.data(), obsindxs.data(), telescopes.data(), Nnz,
           pix.data(), pixweights.data(), signal.data(), noise.data(), lambda,
