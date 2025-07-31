@@ -86,9 +86,9 @@ int main(int argc, char *argv[]) {
     int gap_strategy;
     int nested_maxiter = 10;
     bool do_gap_filling;
-    bool mirror_map = false; // TODO: support this option
+    bool mirror;
     uint64_t realization = 0;
-    int Nnz = 3;
+    int nnz = 3;
     int lambda = 8192;
     double sample_rate = 200;
     double rcond_threshold = 1e-1;
@@ -120,6 +120,11 @@ int main(int argc, char *argv[]) {
         .flag() // default: no gap filling
         .store_into(do_gap_filling)
         .help("perform gap filling on the data vector");
+
+    program.add_argument("--mirror")
+        .flag() // default: no mirror
+        .store_into(mirror)
+        .help("use mirror map technique");
 
     // parse command line arguments
     try {
@@ -208,14 +213,26 @@ int main(int argc, char *argv[]) {
 
     // pixels
 
-    std::vector<int> pix(nb_samp * Nnz);
+    std::vector<int> pix(nb_samp * nnz);
     fname = data_path + "/pixels_" + std::to_string(rank) + ".bin";
     fillArrayFromFile(fname.c_str(), pix.data(), pix.size(), sizeof(pix[0]));
 
+    if (mirror) {
+        // point all flagged samples to pixel number Npix (outside range)
+        int npix = 12 * nside * nside;
+        for (int i = 0; i < nb_samp; i++) {
+            int innz = i * nnz;
+            for (int j = 0; j < nnz; j++) {
+                if (pix[innz + j] < 0)
+                    pix[innz + j] = npix * nnz + j;
+            }
+        }
+    }
+
     if (single_pixel) {
         for (int i = 0; i < nb_samp; i++) {
-            int innz = i * Nnz;
-            for (int j = 0; j < Nnz; j++) {
+            int innz = i * nnz;
+            for (int j = 0; j < nnz; j++) {
                 // don't remove the gaps
                 if (pix[innz + j] >= 0) {
                     pix[innz + j] = pix[j];
@@ -232,7 +249,7 @@ int main(int argc, char *argv[]) {
 
     // pixweights
 
-    std::vector<double> pixweights(nb_samp * Nnz);
+    std::vector<double> pixweights(nb_samp * nnz);
     fname = data_path + "/pixweights_" + std::to_string(rank) + ".bin";
     fillArrayFromFile(fname.c_str(), pixweights.data(), pixweights.size(),
                       sizeof(pixweights[0]));
@@ -353,9 +370,9 @@ int main(int argc, char *argv[]) {
 #if 1
     MLmap(MPI_COMM_WORLD, outpath, ref, solver, precond, Z_2lvl,
           pointing_commflag, tol, maxiter, enl_fac, ortho_alg, bs_red, nside,
-          gap_strategy, nested_maxiter, do_gap_filling, mirror_map, realization,
+          gap_strategy, nested_maxiter, do_gap_filling, mirror, realization,
           data_size_proc.data(), nb_blocks_loc, local_blocks_sizes.data(),
-          sample_rate, detindxs.data(), obsindxs.data(), telescopes.data(), Nnz,
+          sample_rate, detindxs.data(), obsindxs.data(), telescopes.data(), nnz,
           pix.data(), pixweights.data(), signal.data(), noise.data(), lambda,
           inv_tt.data(), tt.data(), rcond_threshold);
 #else
