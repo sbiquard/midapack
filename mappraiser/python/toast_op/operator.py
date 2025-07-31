@@ -53,6 +53,7 @@ class MapMaker(ToastOperator):
     # General configuration
     binned = Bool(False, help='Make a binned map')
     downscale = Int(1, help='Downscale the noise by sqrt of this factor')
+    downscale_signal = Int(1, help='Downscale the signal by sqrt of this factor')
     estimate_psd = Bool(False, help='Estimate the noise PSD from the data')
     bin_psd = Bool(False, help='Bin the noise PSD for fitting')
     estimate_spin_zero = Bool(False, help='When doing pair-diff, still estimate a spin-zero field')
@@ -285,7 +286,7 @@ class MapMaker(ToastOperator):
         if self.scrambling is not None:
             # disable purging momentarily
             ctnr.purge = False
-        signal = ctnr.get_signal()
+        signal = ctnr.get_signal() / np.sqrt(self.downscale_signal)
         noise = ctnr.get_noise() / np.sqrt(self.downscale)
         # re-enable purging (if requested)
         ctnr.purge = self.purge_det_data
@@ -301,7 +302,7 @@ class MapMaker(ToastOperator):
         if self.scrambling is not None:
             self.scrambling.enabled = True  # pyright: ignore[reportAttributeAccessIssue]
             self.scrambling.apply(data, detectors=detectors)  # pyright: ignore[reportAttributeAccessIssue]
-            signal = ctnr.get_signal()
+            signal = ctnr.get_signal() / np.sqrt(self.downscale_signal)
             noise = ctnr.get_noise() / np.sqrt(self.downscale)
 
         # Check that sizes are consistent
