@@ -175,6 +175,17 @@ int build_pixel_to_time_domain_mapping(Mat *A, int nside) {
     return ngap;
 }
 
+int get_mirror_pixels_count(Mat *A, int nside) {
+    int n_mirror = 0;
+    int npix = 12 * nside * nside;
+    for (int c = 0; c < A->lcount; c++) {
+        if (A->lindices[c] >= A->nnz * npix) {
+            n_mirror++;
+        }
+    }
+    return n_mirror;
+}
+
 int argmax(const int *array, int size) {
     int max = array[0];
     int argmax = 0;

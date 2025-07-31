@@ -111,16 +111,7 @@ void MLmap(MPI_Comm comm, char *outpath, char *ref, int solver, int precond,
 
     nbr_extra_pixels = A.trash_pix * nnz;
     nbr_valid_pixels = A.lcount - nbr_extra_pixels;
-
-    // Count mirrored pixels
-    int n_mirror = 0;
-    int npix = 12 * nside * nside;
-    for (int c = 0; c < A.lcount; c++) {
-        if (A.lindices[c] >= nnz * npix) {
-            // This is a mirrored pixel
-            n_mirror++;
-        }
-    }
+    int n_mirror = get_mirror_pixels_count(&A, nside);
 
     if (rank == 0) {
         printf("Initialized pointing matrix in %lf s\n", elapsed);
