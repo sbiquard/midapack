@@ -419,3 +419,10 @@ if (LAPACKE_LIBRARIES)
 endif()
 mark_as_advanced(LAPACKE_DIR)
 mark_as_advanced(LAPACKE_DIR_FOUND)
+
+# check that LAPACKE has been found
+# ---------------------------------
+include(FindPackageHandleStandardArgs)
+find_package_handle_standard_args(LAPACKE DEFAULT_MSG
+  LAPACKE_LIBRARIES
+  LAPACKE_WORKS)
