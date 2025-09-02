@@ -54,6 +54,7 @@ class MapMaker(ToastOperator):
     binned = Bool(False, help='Make a binned map')
     downscale = Int(1, help='Downscale the noise by sqrt of this factor')
     downscale_signal = Int(1, help='Downscale the signal by sqrt of this factor')
+    enforce_symmetric_fit = Bool(False, help='Enforce symmetric noise fits for even/odd detectors')
     estimate_psd = Bool(False, help='Estimate the noise PSD from the data')
     bin_psd = Bool(False, help='Bin the noise PSD for fitting')
     estimate_spin_zero = Bool(False, help='When doing pair-diff, still estimate a spin-zero field')
@@ -432,6 +433,10 @@ class MapMaker(ToastOperator):
                 if self.median_psd_fit:
                     # use the median PSD for all detectors
                     psds[:] = np.median(psds, axis=0)
+                if self.enforce_symmetric_fit:
+                    # enforce that even/odd detectors have the same PSD
+                    for i in range(1, psds.shape[0], 2):
+                        psds[i] = psds[i - 1]
             else:
                 # interpolate the PSD from an existing Noise model
                 psds = ctnr.get_interp_psds(fft_size, rate=self.fsample)
