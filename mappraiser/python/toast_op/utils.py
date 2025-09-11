@@ -1,5 +1,4 @@
 import warnings
-from pathlib import Path
 
 import numpy as np
 import numpy.typing as npt
@@ -114,7 +113,7 @@ def _fit_model(f, pxx, *, bin: bool):
         f, pxx = bin_psd(f, pxx)
 
     return curve_fit(
-        _log_model,
+        psd_log_model,
         f,
         np.log10(pxx),
         p0=p0,
@@ -125,21 +124,24 @@ def _fit_model(f, pxx, *, bin: bool):
 
 def estimate_psd(
     noise: npt.NDArray[lib.SIGNAL_TYPE],
-    block_sizes: npt.NDArray[lib.INDEX_TYPE],
-    fft_size: int,
     *,
+    block_sizes: npt.NDArray[lib.INDEX_TYPE],
     bin_psd: bool,
     obs_names: list[str],
     det_names: list[str],
     rate: float = 1.0,
-    save_dest: Path | None = None,
-    regularization: float = 0.0,
 ) -> npt.NDArray:
-    """Estimate the PSD for each block of a noise timestream using Welch's method"""
+    """Estimate the PSD parameters for each block of a noise timestream using Welch's method.
 
+    Returns:
+        Array of shape (n_blocks, 4) containing the fitted parameters for each block:
+        - sigma: white noise level
+        - alpha: spectral index
+        - fknee: knee frequency
+        - f0: low frequency offset
+    """
     nperseg = int(WELCH_SEGMENT_DURATION * rate)
-    freq = np.fft.rfftfreq(fft_size, 1 / rate)
-    psds = np.empty((block_sizes.size, fft_size // 2 + 1))
+    fit_params = np.empty((block_sizes.size, 4))
     acc = 0
     failed = np.zeros_like(block_sizes, dtype=bool)
     for i, (block_size, obs_name, det_name) in enumerate(
@@ -148,53 +150,16 @@ def estimate_psd(
         # we compute periodograms for each block separately because they can have different sizes
         tod = noise[acc : acc + block_size]
         f, pxx = welch(tod, fs=rate, nperseg=nperseg)
-        popt = pcov = None
+        popt = None
         try:
             # do not use zero frequency
-            popt, pcov = _fit_model(f[1:], pxx[1:], bin=bin_psd)
+            popt, _pcov = _fit_model(f[1:], pxx[1:], bin=bin_psd)
+            fit_params[i] = popt
         except RuntimeError:
             msg = f'Failed to fit PSD for {obs_name} - {det_name}.'
             warnings.warn(msg, stacklevel=2)
             # mark this block as failed, we'll handle it later
             failed[i] = True
-        else:
-            psds[i] = _model(freq, *popt)
-
-        if save_dest is not None:
-            # save information to disk
-            # WARNING: this assumes the TOD of a given detector is not shared between processes
-            # otherwise we introduce a race condition
-            session_dest = save_dest / obs_name
-            session_dest.mkdir(parents=True, exist_ok=True)
-            np.savez(
-                session_dest / det_name,
-                block_size=block_size,
-                rate=rate,
-                nperseg=nperseg,
-                f=f,
-                Pxx=pxx,
-                popt=popt if popt is not None else np.nan,
-                pcov=pcov if pcov is not None else np.nan,
-                fft_size=fft_size,
-            )
-            import matplotlib.pyplot as plt
-
-            fig, ax = plt.subplots(figsize=(10, 6))
-            if popt is not None:
-                pparams = 'sigma={:e}\nalpha={:e}\nfk={:e}\nf0={:.1e}'.format(*popt)
-                ax.set_title(f'{det_name}\n{pparams}\n{regularization=}')
-            else:
-                ax.set_title(f'{det_name} - fit failed')
-            ax.loglog(f, pxx, label='periodogram')
-            ax.loglog(freq, psds[i], label='fitted psd')
-            if regularization > 0:
-                ax.loglog(freq, psds[i] + regularization, label='regularized psd')
-            ax.legend()
-            fig.savefig(session_dest / f'{det_name}_psd.png', bbox_inches='tight')
-            plt.close(fig)
-
-        # regularization term
-        psds[i] += regularization
 
         # go to the next block
         acc += block_size
@@ -204,16 +169,16 @@ def estimate_psd(
         msg = 'all psd fits failed'
         raise RuntimeError(msg)
     if np.any(failed):
-        # use the average of the other blocks
-        psds[failed] = np.median(psds[~failed], axis=0)
-    return psds
+        # use the median of the other detectors for failed fits
+        fit_params[failed] = np.median(fit_params[~failed], axis=0)
+    return fit_params
 
 
-def _log_model(x, sigma, alpha, fk, f0):
+def psd_log_model(x, sigma, alpha, fk, f0):
     return 2 * np.log10(sigma) + np.log10(1 + ((x + f0) / fk) ** -alpha)
 
 
-def _model(x, sigma, alpha, fk, f0):
+def psd_model(x, sigma, alpha, fk, f0):
     return sigma**2 * (1 + ((x + f0) / fk) ** -alpha)
 
 

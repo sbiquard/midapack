@@ -19,7 +19,14 @@ from toast.utils import Logger
 from .. import wrapper as lib
 from .buffer import MappraiserBuffers
 from .interface import ToastContainer
-from .utils import effective_ntt, estimate_psd, log_time_memory, next_fast_fft_size, psd_to_invntt
+from .utils import (
+    effective_ntt,
+    estimate_psd,
+    log_time_memory,
+    next_fast_fft_size,
+    psd_model,
+    psd_to_invntt,
+)
 
 __all__ = [
     'MapMaker',
@@ -40,15 +47,15 @@ class MapMaker(ToastOperator):
 
     # TOAST names
     det_data = Unicode(defaults.det_data, help='Observation detdata key for the timestream data')
-    noise_data = Unicode("noise", allow_None=True, help="Observation detdata key for the noise data")  # fmt: skip
+    noise_data = Unicode("noise", allow_None=True, help='Observation detdata key for the noise data')  # fmt: skip
     noise_model = Unicode(defaults.noise_model, help='Observation key containing the noise model')
 
     # Flagging and masking
     det_mask = Int(defaults.det_mask_nonscience, help='Bit mask value for per-detector flagging')
-    det_flag_mask = Int(defaults.det_mask_nonscience, help="Bit mask value for detector sample flagging")  # fmt: skip
-    det_flags = Unicode(defaults.det_flags, allow_none=True, help='Observation detdata key for flags to use')
-    shared_flag_mask = Int(defaults.shared_mask_nonscience, help="Bit mask value for shared flagging")  # fmt: skip
-    shared_flags = Unicode(defaults.shared_flags, allow_none=True, help="Observation shared key for telescope flags to use")  # fmt: skip
+    det_flag_mask = Int(defaults.det_mask_nonscience, help='Bit mask value for detector sample flagging')  # fmt: skip
+    det_flags = Unicode(defaults.det_flags, allow_none=True, help='Observation detdata key for flags to use')  # fmt: skip
+    shared_flag_mask = Int(defaults.shared_mask_nonscience, help='Bit mask value for shared flagging')  # fmt: skip
+    shared_flags = Unicode(defaults.shared_flags, allow_none=True, help='Observation shared key for telescope flags to use')  # fmt: skip
 
     # General configuration
     binned = Bool(False, help='Make a binned map')
@@ -66,7 +73,7 @@ class MapMaker(ToastOperator):
     plot_tod = Bool(False, help='Plot the signal+noise TOD after staging')
     purge_det_data = Bool(True, help='Clear all observation detector data after staging')
     psd_regularization = Float(0.0, help='Constant value added to the noise PSD for regularization')
-    save_fit_info = Bool(False, help='Save fit information when estimating noise PSD')
+    save_noise_model = Bool(False, help='Save AnalyticNoise model to output directory')
     zero_noise = Bool(False, help='Fill the noise buffer with zero')
     zero_signal = Bool(False, help='Fill the signal buffer with zero')
 
@@ -89,11 +96,7 @@ class MapMaker(ToastOperator):
     z_2lvl = Int(0, help='Size of 2lvl deflation space')
 
     # Miscellaneous
-    scrambling = Instance(
-        klass=GainScrambler,
-        allow_none=True,
-        help='GainScrambler to perturb the data after noise estimation',
-    )
+    scrambling = Instance(klass=GainScrambler, allow_none=True, help='GainScrambler to perturb the data after noise estimation')  # fmt: skip
 
     @traitlets.validate('gap_strategy')
     def _check_gap_strategy(self, proposal):
@@ -415,31 +418,53 @@ class MapMaker(ToastOperator):
                 levels = ctnr.get_detector_levels()
                 invntt, ntt = 1 / levels, levels
         else:
+            # Determine suitable FFT size
             fft_size = max(next_fast_fft_size(block_size) for block_size in block_sizes)
+
             if self.estimate_psd:
-                # estimate the noise covariance from the data
-                save_dest = Path(self.output_dir) / 'noise_psd_fit'
-                psds = estimate_psd(
+                # Estimated PSD parameters from the data
+                fit_params = estimate_psd(
                     noise,
-                    block_sizes,
-                    fft_size,
+                    block_sizes=block_sizes,
                     bin_psd=self.bin_psd,
                     obs_names=ctnr.observation_names,
                     det_names=ctnr.detector_names,
                     rate=self.fsample,
-                    save_dest=save_dest if self.save_fit_info else None,
-                    regularization=self.psd_regularization,
                 )
+
                 if self.median_psd_fit:
-                    # use the median PSD for all detectors
-                    psds[:] = np.median(psds, axis=0)
+                    # use the median parameters for all detectors
+                    fit_params[:] = np.median(fit_params, axis=0)
+
                 if self.enforce_symmetric_fit:
-                    # enforce that even/odd detectors have the same PSD
-                    for i in range(1, psds.shape[0], 2):
-                        psds[i] = psds[i - 1]
+                    # take the mean of even/odd detectors
+                    for i in range(2, fit_params.shape[0], 2):
+                        fit_params[i] = fit_params[i - 1] = 0.5 * (
+                            fit_params[i] + fit_params[i - 1]
+                        )
+
+                if self.save_noise_model:
+                    raise NotImplementedError
+                    # Create an AnalyticNoise object and save it
+                    # model = AnalyticNoise(
+                    #     detectors=ctnr.det_selection,
+                    #     rate=dict.fromkeys(ctnr.det_selection, self.fsample * u.Hz),
+                    #     ...
+                    # )
+
+                # Generate PSDs from the fitted parameters
+                freq = np.fft.rfftfreq(fft_size, 1 / self.fsample)
+                psds = np.array([psd_model(freq, *params) for params in fit_params])
+
+                # Add regularization
+                if self.psd_regularization > 0:
+                    psds += self.psd_regularization
+
             else:
-                # interpolate the PSD from an existing Noise model
+                # Interpolate the PSD from an existing Noise model
                 psds = ctnr.get_interp_psds(fft_size, rate=self.fsample)
+
+            # Compute invntt and ntt from the PSDs
             invntt = psd_to_invntt(psds, self.lagmax)
             ntt = effective_ntt(invntt, fft_size)
 
