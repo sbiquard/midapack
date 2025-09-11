@@ -246,15 +246,17 @@ class ToastContainer:
     shared_flags: str | None = defaults.shared_flags
 
     def get_signal(self) -> npt.NDArray[lib.SIGNAL_TYPE]:
-        return np.concatenate([ob.get_signal() for ob in self._obs], axis=None)
+        return np.concatenate([ob.get_signal() for ob in self.observations], axis=None)
 
     def get_noise(self) -> npt.NDArray[lib.SIGNAL_TYPE]:
-        return np.concatenate([ob.get_noise() for ob in self._obs], axis=None)
+        return np.concatenate([ob.get_noise() for ob in self.observations], axis=None)
 
     def get_pointing_indices(self, op: PixelsHealpix) -> npt.NDArray[lib.INDEX_TYPE]:
         # Concatenation with axis=None flattens the array
-        indices = np.concatenate([ob.get_indices(op) for ob in self._synthesized_obs(op)], axis=None)
-        flags = np.concatenate([ob.get_flags() for ob in self._obs], axis=None)
+        indices = np.concatenate(
+            [ob.get_indices(op) for ob in self._synthesized_obs(op)], axis=None
+        )
+        flags = np.concatenate([ob.get_flags() for ob in self.observations], axis=None)
         if self.mirror:
             # Do not set flagged pixels to -1, but create new pixel indices for mirror pixels
             npix = hp.nside2npix(op.nside)
@@ -275,10 +277,10 @@ class ToastContainer:
 
     def get_interp_psds(self, fft_size: int, rate: float = 1.0) -> npt.NDArray:
         """Return a 2-d array of interpolated PSDs for the selected detectors"""
-        return np.vstack([ob.get_interp_psds(fft_size, rate) for ob in self._obs])
+        return np.vstack([ob.get_interp_psds(fft_size, rate) for ob in self.observations])
 
     def get_detector_levels(self) -> npt.NDArray:
-        return np.concatenate([ob.get_detector_levels() for ob in self._obs], axis=None)
+        return np.concatenate([ob.get_detector_levels() for ob in self.observations], axis=None)
 
     def allgather(self, value: Any) -> list[Any]:
         comm = self.data.comm.comm_world
@@ -288,47 +290,47 @@ class ToastContainer:
     @property
     def n_local_samples(self) -> int:
         """Compute the number of local samples, summed over all observations"""
-        return sum(ob.samples for ob in self._obs)
+        return sum(ob.samples for ob in self.observations)
 
     @property
     def n_local_blocks(self) -> int:
         """Compute the number of local blocks, summed over all observations"""
-        return sum(len(ob.fdets) for ob in self._obs)
+        return sum(len(ob.fdets) for ob in self.observations)
 
     @property
     def local_data_size(self) -> int:
         """Compute the size of the local signal buffer"""
-        return sum(ob.samples * len(ob.fdets) for ob in self._obs)
+        return sum(ob.samples * len(ob.fdets) for ob in self.observations)
 
     @property
     def local_block_sizes(self) -> npt.NDArray[lib.INDEX_TYPE]:
         """Compute the local block sizes for each observation"""
-        return np.concatenate([ob.local_block_sizes for ob in self._obs], axis=None)
+        return np.concatenate([ob.local_block_sizes for ob in self.observations], axis=None)
 
     @property
     def telescope_uids(self) -> npt.NDArray[lib.META_ID_TYPE]:
-        return np.concatenate([ob.telescope_uids for ob in self._obs], axis=None)
+        return np.concatenate([ob.telescope_uids for ob in self.observations], axis=None)
 
     @property
     def session_uids(self) -> npt.NDArray[lib.META_ID_TYPE]:
-        return np.concatenate([ob.session_uids for ob in self._obs], axis=None)
+        return np.concatenate([ob.session_uids for ob in self.observations], axis=None)
 
     @property
     def detector_uids(self) -> npt.NDArray[lib.META_ID_TYPE]:
-        return np.concatenate([ob.detector_uids for ob in self._obs], axis=None)
+        return np.concatenate([ob.detector_uids for ob in self.observations], axis=None)
 
     @property
     def observation_names(self) -> list[str]:
         # repetition is intentional
-        return [ob.ob.name for ob in self._obs for _ in ob.fdets]  # pyright: ignore[reportReturnType]
+        return [ob.ob.name for ob in self.observations for _ in ob.fdets]  # pyright: ignore[reportReturnType]
 
     @property
     def detector_names(self) -> list[str]:
         # concatenation of fdets for each observation
-        return [name for ob in self._obs for name in ob.fdets]
+        return [name for ob in self.observations for name in ob.fdets]
 
     @property
-    def _obs(self) -> list[ObservationData]:
+    def observations(self) -> list[ObservationData]:
         return [
             ObservationData(
                 ob=ob,
@@ -354,4 +356,4 @@ class ToastContainer:
                 _ = operator.apply(self.data.select(obs_uid=ob.ob.uid), detectors=ob.sdets)
             return ob
 
-        return [synthesize(ob) for ob in self._obs]
+        return [synthesize(ob) for ob in self.observations]
