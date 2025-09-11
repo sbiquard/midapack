@@ -7,6 +7,8 @@ import numpy as np
 import numpy.typing as npt
 import traitlets
 from toast.data import Data as ToastData
+from toast.io import hdf5_open
+from toast.noise_sim import AnalyticNoise
 from toast.observation import default_values as defaults
 from toast.ops import GainScrambler
 from toast.ops.operator import Operator as ToastOperator
@@ -444,13 +446,43 @@ class MapMaker(ToastOperator):
                         )
 
                 if self.save_noise_model:
-                    raise NotImplementedError
-                    # Create an AnalyticNoise object and save it
-                    # model = AnalyticNoise(
-                    #     detectors=ctnr.det_selection,
-                    #     rate=dict.fromkeys(ctnr.det_selection, self.fsample * u.Hz),
-                    #     ...
-                    # )
+                    # Create output directory
+                    save_dir = Path(self.output_dir) / 'noise_model'
+                    if ctnr.data.comm.world_rank == 0:
+                        save_dir.mkdir(parents=True, exist_ok=True)
+
+                    # Loop through data blocks (observations and detectors)
+                    offset = 0
+                    for toast_obs, ob in zip(ctnr.data.obs, ctnr.observations, strict=True):
+                        # Create an AnalyticNoise object for this observation
+                        detectors = ob.fdets
+                        model = AnalyticNoise(
+                            detectors=detectors,
+                            rate=dict.fromkeys(detectors, self.fsample * u.Hz),
+                            fmin={
+                                det: fit_params[offset + i, 3] * u.Hz
+                                for i, det in enumerate(detectors)
+                            },
+                            fknee={
+                                det: fit_params[offset + i, 2] * u.Hz
+                                for i, det in enumerate(detectors)
+                            },
+                            alpha={
+                                det: fit_params[offset + i, 1] for i, det in enumerate(detectors)
+                            },
+                            NET={
+                                det: fit_params[offset + i, 0] * u.K * np.sqrt(1.0 * u.second)
+                                for i, det in enumerate(detectors)
+                            },
+                        )
+
+                        # Save the model to a file
+                        file = save_dir / f'{toast_obs.uid}_analytic_noise.h5'
+                        hf = hdf5_open(str(file), 'w', comm=self._comm)
+                        model.save_hdf5(hf, toast_obs)
+
+                        # Advance the offset
+                        offset += len(detectors)
 
                 # Generate PSDs from the fitted parameters
                 freq = np.fft.rfftfreq(fft_size, 1 / self.fsample)
