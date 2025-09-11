@@ -70,6 +70,7 @@ class MapMaker(ToastOperator):
     lagmax = Int(1_000, help='Maximum lag of the correlation function')
     median_psd_fit = Bool(False, help='Use median fitted PSD values for all detectors')
     mem_report = Bool(False, help='Print memory reports')
+    noise_model_dir = Unicode(None, allow_none=True, help='Load AnalyticNoise model from this location')  # fmt: skip
     output_dir = Unicode('.', help='Write output data products to this directory')
     pair_diff = Bool(False, help='Process differenced timestreams')
     plot_tod = Bool(False, help='Plot the signal+noise TOD after staging')
@@ -276,6 +277,18 @@ class MapMaker(ToastOperator):
             det_flags=self.det_flags,
             shared_flags=self.shared_flags,
         )
+
+        if self.noise_model_dir is not None:
+            dir = Path(self.output_dir) / self.noise_model_dir
+
+            # Load model for each observation
+            for obs in data.obs:
+                file = dir / f'{obs.uid}_analytic_noise.h5'
+                hf = hdf5_open(str(file), 'r', comm=self._comm)
+                model = AnalyticNoise()
+                model.load_hdf5(hf, obs)
+                # Replace or create the noise model in the observation
+                obs[self.noise_model] = model
 
         # Get data distribution information
         n_blocks = ctnr.n_local_blocks  # roughly n_obs * n_det
