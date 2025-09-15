@@ -182,7 +182,21 @@ class MapMaker(ToastOperator):
         # Setting up and staging the data
         self._log_memory(data, 'Before staging the data')
         self._prepare(data)
-        self._stage(data, detectors)
+
+        # Hack if saving noise model and selecting subset of detectors...
+        # We need to estimate it for all detectors otherwise loading fails afterwards
+        if self.save_noise_model and detectors is not None:
+            self._stage(data, purge=False, detectors=None, save_noise_model=True)
+
+        # Now (re)compute with correct selection, and do not save the noise model
+        # Yes this is wasteful but who cares at this point
+        self._stage(
+            data,
+            purge=self.purge_det_data,
+            detectors=detectors,
+            save_noise_model=False,
+            noise_model_dir=self.noise_model_dir,
+        )
         self._log_info('Staged data')
 
         # Call mappraiser
@@ -258,14 +272,22 @@ class MapMaker(ToastOperator):
                 json.dump(self._params, file, sort_keys=True, indent=2)
 
     @function_timer
-    def _stage(self, data: ToastData, detectors: list[str] | None) -> None:
+    def _stage(
+        self,
+        data: ToastData,
+        *,
+        purge: bool,
+        detectors: list[str] | None,
+        noise_model_dir: str | None = None,
+        save_noise_model: bool = False,
+    ) -> None:
         """Copy the data to the Mappraiser buffers"""
         # Wrap the TOAST Data container into our custom class
         ctnr = ToastContainer(
             data,
             self._nnz,
             self.pair_diff,
-            self.purge_det_data,
+            purge,
             self.mirror,
             det_selection=detectors,
             det_data=self.det_data,
@@ -278,8 +300,8 @@ class MapMaker(ToastOperator):
             shared_flags=self.shared_flags,
         )
 
-        if self.noise_model_dir is not None:
-            dir = Path(self.output_dir) / self.noise_model_dir
+        if noise_model_dir is not None:
+            dir = Path(self.output_dir) / noise_model_dir
 
             # Load model for each observation
             for obs in data.obs:
@@ -301,21 +323,25 @@ class MapMaker(ToastOperator):
         obsindxs = ctnr.session_uids
         detindxs = ctnr.detector_uids
 
-        # Signal and noise
+        # Hack: disable purging momentarily if scrambling is requested here
         if self.scrambling is not None:
-            # disable purging momentarily
             ctnr.purge = False
+
+        # Signal buffer
         signal = ctnr.get_signal() / np.sqrt(self.downscale_signal)
+
+        # Noise buffer
         noise = ctnr.get_noise() / np.sqrt(self.downscale)
-        # re-enable purging (if requested)
-        ctnr.purge = self.purge_det_data
 
         # Pointing and weights
         pixels = ctnr.get_pointing_indices(self.pixel_pointing)  # pyright: ignore[reportArgumentType]
         weights = ctnr.get_pointing_weights(self.stokes_weights)  # pyright: ignore[reportArgumentType]
 
         # Inverse noise covariance
-        invntt, ntt = self._get_invntt(ctnr, noise, block_sizes)
+        invntt, ntt = self._get_invntt(ctnr, noise, block_sizes, save=save_noise_model)
+
+        # Re-enable purging (if needed)
+        ctnr.purge = purge
 
         # Scramble the data if requested and update signal and noise
         if self.scrambling is not None:
@@ -410,6 +436,7 @@ class MapMaker(ToastOperator):
         ctnr: ToastContainer,
         noise: npt.NDArray[lib.SIGNAL_TYPE],
         block_sizes: npt.NDArray[lib.INDEX_TYPE],
+        save: bool = False,
     ) -> tuple[npt.NDArray[lib.INVTT_TYPE], npt.NDArray[lib.INVTT_TYPE]]:
         if any(self.lagmax > block_sizes):
             msg = 'Maximum lag should be less than the number of samples of any data block'
@@ -458,7 +485,7 @@ class MapMaker(ToastOperator):
                             fit_params[i] + fit_params[i - 1]
                         )
 
-                if self.save_noise_model:
+                if save:
                     # Create output directory
                     save_dir = Path(self.output_dir) / 'noise_model'
                     if ctnr.data.comm.world_rank == 0:
