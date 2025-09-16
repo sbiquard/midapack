@@ -17,7 +17,7 @@ from .. import wrapper as lib
 from .utils import interpolate_psd, pairwise
 
 MappraiserDtype = lib.SIGNAL_TYPE | lib.WEIGHT_TYPE | lib.INVTT_TYPE | lib.INDEX_TYPE
-ValidPairDiffTransform = Literal['half-sub', 'add']
+ValidPairDiffTransform = Literal['half-sub', 'add', 'select_even']
 
 
 @dataclass
@@ -116,6 +116,8 @@ class ObservationData:
             transformed = 0.5 * (a[::2] - a[1::2])
         elif operation == 'add':
             transformed = a[::2] + a[1::2]
+        elif operation == 'select_even':
+            transformed = a[::2]
         else:
             msg = f'Invalid operation {operation!r}'
             raise ValueError(msg)
@@ -177,7 +179,8 @@ class ObservationData:
             weights = weights[..., 1:]
         if self.purge:
             del self.ob.detdata[op.weights]
-        return self.transform_pairs(weights)
+        # Do this otherwise GQU weights are zero in G...
+        return self.transform_pairs(weights, operation='select_even')
 
     def get_interp_psds(self, fft_size: int, rate: float = 1.0):
         """Return a 2-d array of interpolated PSDs for the selected detectors"""
